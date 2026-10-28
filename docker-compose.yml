@@ -1,0 +1,145 @@
+# Local development stack. Production: docker-compose.prod.yml.
+#
+#   cp .env.example .env              # then edit the secrets
+#   docker compose up -d --build      # postgres, redis, minio, migrate, api, worker
+#   docker compose run --rm api pytest
+#
+# Every port is bound to 127.0.0.1 only.
+name: pikirler
+
+x-app: &app
+  build:
+    context: .
+    args:
+      EXTRAS: dev
+  image: pikirler-backend:dev
+  env_file: .env
+  environment:
+    PIKIRLER_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    PIKIRLER_TEST_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}_test
+    PIKIRLER_REDIS_URL: redis://redis:6379/0
+    PIKIRLER_TEST_REDIS_URL: redis://redis:6379/15
+    PIKIRLER_S3_ENDPOINT_URL: http://minio:9000
+    PIKIRLER_TEST_S3_ENDPOINT: http://minio:9000
+  volumes:
+    - ./app:/srv/app/app
+    - ./tests:/srv/app/tests
+    - ./alembic.ini:/srv/app/alembic.ini:ro
+    - ./pyproject.toml:/srv/app/pyproject.toml:ro
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # UTF-8 locale: the full-text parser needs it to treat Cyrillic,
+      # Turkmen Latin and CJK characters as word characters.
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5460}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  redis:
+    image: redis:7.4-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6460}:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    ports:
+      - "127.0.0.1:${MINIO_PORT:-9460}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9461}:9001"
+    volumes:
+      - miniodata:/data
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # Creates the private bucket once. No anonymous policy is ever set on it.
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
+        mc mb --ignore-existing local/$${PIKIRLER_S3_BUCKET} &&
+        mc anonymous set none local/$${PIKIRLER_S3_BUCKET}
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      PIKIRLER_S3_BUCKET: ${PIKIRLER_S3_BUCKET}
+
+  # Migrations are a separate one-shot step. env.py additionally holds a
+  # PostgreSQL advisory lock, so two concurrent runs cannot interleave.
+  migrate:
+    <<: *app
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    <<: *app
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload", "--reload-dir", "app"]
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${API_PORT:-8460}:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+  worker:
+    <<: *app
+    command: ["arq", "app.worker.WorkerSettings"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "arq", "--check", "app.worker.WorkerSettings"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+
+volumes:
+  pgdata:
+  redisdata:
+  miniodata:

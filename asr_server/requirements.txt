@@ -1,0 +1,5 @@
+fastapi>=0.115,<1
+uvicorn[standard]>=0.32,<1
+python-multipart>=0.0.18,<1
+faster-whisper>=1.1,<2
+# Windows + CUDA: nvidia-cublas-cu12 nvidia-cudnn-cu12 (see Second Brain README)

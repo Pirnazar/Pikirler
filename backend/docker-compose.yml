@@ -1,9 +1,11 @@
 # Local development stack. Production: docker-compose.prod.yml.
 #
-#   cp .env.example .env              # then edit the secrets
-#   docker compose up -d --build      # postgres, redis, minio, migrate, api, worker
+#   python scripts/init_env.py        # .env with random secrets
+#   docker compose up -d --build      # postgres, redis, migrate, api, worker
 #   docker compose run --rm api pytest
 #
+# Uploaded files are stored in the "mediadata" volume. MinIO is optional:
+# COMPOSE_PROFILES=s3 in .env adds minio + minio-init (see .env.example).
 # Every port is bound to 127.0.0.1 only.
 name: pikirler
 
@@ -19,9 +21,8 @@ x-app: &app
     PIKIRLER_TEST_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}_test
     PIKIRLER_REDIS_URL: redis://redis:6379/0
     PIKIRLER_TEST_REDIS_URL: redis://redis:6379/15
-    PIKIRLER_S3_ENDPOINT_URL: http://minio:9000
-    PIKIRLER_TEST_S3_ENDPOINT: http://minio:9000
   volumes:
+    - mediadata:/srv/data/media
     - ./app:/srv/app/app
     - ./tests:/srv/app/tests
     - ./alembic.ini:/srv/app/alembic.ini:ro
@@ -63,7 +64,8 @@ services:
       retries: 20
 
   minio:
-    image: minio/minio:latest
+    image: ${MINIO_IMAGE:-minio/minio:latest}
+    profiles: ["s3"]
     restart: unless-stopped
     command: ["server", "/data", "--console-address", ":9001"]
     environment:
@@ -82,7 +84,8 @@ services:
 
   # Creates the private bucket once. No anonymous policy is ever set on it.
   minio-init:
-    image: minio/mc:latest
+    image: ${MINIO_MC_IMAGE:-minio/mc:latest}
+    profiles: ["s3"]
     depends_on:
       minio:
         condition: service_healthy
@@ -120,6 +123,7 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+        required: false
 
   worker:
     <<: *app
@@ -138,8 +142,10 @@ services:
         condition: service_healthy
       minio-init:
         condition: service_completed_successfully
+        required: false
 
 volumes:
   pgdata:
   redisdata:
+  mediadata:
   miniodata:

@@ -21,7 +21,7 @@
 ## Стек
 
 Python 3.12 · FastAPI · SQLAlchemy 2 (async, asyncpg) · Alembic · PostgreSQL 16 +
-pgvector + pg_trgm · Redis + ARQ · MinIO (S3) · Argon2id · Pydantic v2 ·
+pgvector + pg_trgm · Redis + ARQ · локальный диск или S3/MinIO · Argon2id · Pydantic v2 ·
 pytest · ruff · mypy (strict).
 
 ## Быстрый старт (разработка)
@@ -32,16 +32,18 @@ pytest · ruff · mypy (strict).
 cp .env.example .env
 ```
 
-Отредактируйте `.env`: замените все `change_me` (пароли Postgres/MinIO,
+Отредактируйте `.env` (или создайте его командой `python scripts/init_env.py`): замените все `change_me` (пароли Postgres/MinIO,
 `PIKIRLER_SECRET_KEY` — 64+ случайных символов).
 
 ```bash
 docker compose up -d --build
 ```
 
-Поднимаются `postgres` (5460), `redis` (6460), `minio` (9460/9461), одноразовый
+Поднимаются `postgres` (5460), `redis` (6460), одноразовый
 `migrate`, `api` (8460, авто-перезагрузка) и `worker`. Документация API:
 <http://127.0.0.1:8460/api/v1/pikirler/docs>.
+Файлы хранятся в томе `mediadata`; MinIO (`minio` на 9460/9461) включается
+строкой `COMPOSE_PROFILES=s3` в `.env` (подробности — в `.env.example`).
 
 Публичной регистрации нет. Владелец создаётся на сервере:
 

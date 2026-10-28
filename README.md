@@ -12,7 +12,7 @@
 
 | Папка | Что там |
 |---|---|
-| [`backend/`](backend/README.md) | API: FastAPI, PostgreSQL + pgvector, Redis/ARQ, MinIO (S3), Docker Compose |
+| [`backend/`](backend/README.md) | API: FastAPI, PostgreSQL + pgvector, Redis/ARQ, Docker Compose |
 | [`frontend/`](frontend/README.md) | веб-клиент: React + TypeScript + Vite |
 | [`design/`](design/Pikirler.dc.html) | исходный макет интерфейса (дизайн-система Modernist) |
 
@@ -70,7 +70,7 @@ python backend/scripts/init_env.py --timezone Asia/Ashgabat
 `change_me…`:
 
 - `POSTGRES_PASSWORD` — любой длинный пароль;
-- `MINIO_ROOT_PASSWORD` и `PIKIRLER_S3_SECRET_KEY` — один и тот же пароль, не короче 8 символов;
+- `MINIO_ROOT_PASSWORD` и `PIKIRLER_S3_SECRET_KEY` — один и тот же пароль, не короче 8 символов (нужны, только если включите MinIO);
 - `PIKIRLER_SECRET_KEY` — не меньше 64 случайных символов.
 </details>
 
@@ -82,8 +82,9 @@ Docker Desktop должен быть запущен.
 docker compose -f backend/docker-compose.yml up -d --build
 ```
 
-Первая сборка занимает несколько минут. Поднимутся PostgreSQL, Redis, MinIO,
-API и фоновый воркер; миграции базы применятся автоматически. Проверка:
+Первая сборка занимает несколько минут. Поднимутся PostgreSQL, Redis, API и
+фоновый воркер; миграции базы применятся автоматически. Загруженные файлы
+хранятся в Docker-томе `mediadata`. Проверка:
 
 ```bash
 docker compose -f backend/docker-compose.yml ps
@@ -133,7 +134,7 @@ npm --prefix frontend run dev
 | API и его документация `/api/v1/pikirler/docs` | 8460 |
 | PostgreSQL | 5460 |
 | Redis | 6460 |
-| MinIO / консоль MinIO | 9460 / 9461 |
+| MinIO / консоль MinIO (только если включён, см. ниже) | 9460 / 9461 |
 
 ### Остановка и запуск
 
@@ -147,6 +148,19 @@ docker compose -f backend/docker-compose.yml start
 
 Данные хранятся в Docker-томах и не пропадают при остановке. Команда
 `docker compose down -v` **удаляет** их — не используйте её, если не уверены.
+
+### Хранилище файлов: диск или S3
+
+По умолчанию фото, видео и голосовые заметки лежат в Docker-томе `mediadata`,
+отдельный сервер для них не нужен. Если хотите S3-совместимое хранилище
+(MinIO, Ceph, облачный S3), в `backend/.env`:
+
+- для встроенного MinIO раскомментируйте `COMPOSE_PROFILES=s3`,
+  `PIKIRLER_S3_ENDPOINT_URL` и `PIKIRLER_TEST_S3_ENDPOINT`; поставьте
+  `PIKIRLER_STORAGE_BACKEND=s3`;
+- Docker Hub больше не раздаёт образ `minio/mc`, поэтому укажите в
+  `MINIO_IMAGE` и `MINIO_MC_IMAGE` образы из доступного вам реестра;
+- для внешнего S3 профиль не нужен: укажите `PIKIRLER_S3_ENDPOINT_URL`, бакет и ключи.
 
 ---
 
@@ -240,6 +254,7 @@ git pull
 | Симптом | Что сделать |
 |---|---|
 | `Cannot connect to the Docker daemon` / `error during connect` | Запустите Docker Desktop и дождитесь, пока он загрузится. |
+| `pull access denied for minio/mc` | Версия проекта до 29.10.2026 требовала MinIO. Выполните `git pull`, удалите `backend/.env` и снова запустите `python backend/scripts/init_env.py` — файлы будут храниться на диске. |
 | `port is already allocated` | Порт занят другой программой — поменяйте `*_PORT` в `backend/.env` и перезапустите. Если поменяли порт API, запускайте интерфейс с `PIKIRLER_API_URL=http://127.0.0.1:<порт>`. |
 | Интерфейс открывается, но вход не проходит | Проверьте, что API работает: http://127.0.0.1:8460/api/v1/pikirler/health/ready |
 | Забыли пароль | `docker compose -f backend/docker-compose.yml run --rm api pikirler set-password --email you@example.com` |
@@ -249,7 +264,7 @@ git pull
 
 ## Для разработчиков
 
-- Тесты бэкенда (против настоящих PostgreSQL, Redis и MinIO):
+- Тесты бэкенда (против настоящих PostgreSQL и Redis; S3-тесты запускаются, если включён MinIO):
   `docker compose -f backend/docker-compose.yml run --rm api pytest`
 - Проверка типов фронтенда: `npm --prefix frontend run typecheck`
 - Документация: [архитектура](backend/docs/ARCHITECTURE.md),

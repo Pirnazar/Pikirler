@@ -1,4 +1,4 @@
-"""End-to-end check of a running stack (API + worker + PostgreSQL + Redis + S3).
+"""End-to-end check of a running stack (API + worker + PostgreSQL + Redis + file storage).
 
     docker compose run --rm --no-deps -e SMOKE_PASSWORD=... api \
         python scripts/smoke_test.py http://api:8000 owner@example.com
@@ -56,7 +56,7 @@ def main(base: str, email: str) -> None:
         assert meta["processing_status"] == "ready" and meta["has_thumbnail"], meta
         preview = c.get(f"/media/{up['id']}/content").content
         assert b"SmokeCam" not in preview
-        print("upload -> S3 -> worker preview/thumbnail, EXIF stripped: ok")
+        print("upload -> storage -> worker preview/thumbnail, EXIF stripped: ok")
 
         for tid in (r["id"], t["id"]):
             c.delete(f"/thoughts/{tid}").raise_for_status()

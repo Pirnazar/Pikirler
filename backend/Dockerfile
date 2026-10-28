@@ -32,7 +32,9 @@ ENV PYTHONPATH=/srv/app
 COPY alembic.ini ./
 COPY app ./app
 COPY tests ./tests
-RUN chown -R app:app /srv/app
+# /srv/data/media holds uploaded files with PIKIRLER_STORAGE_BACKEND=local; a
+# fresh named volume mounted there inherits this ownership.
+RUN mkdir -p /srv/data/media && chown -R app:app /srv/app /srv/data
 
 USER app
 EXPOSE 8000

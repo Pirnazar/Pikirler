@@ -2,6 +2,7 @@
 #   * image without dev tools, no source bind mounts, no --reload
 #   * nothing but nginx is published; nginx terminates TLS
 #   * PIKIRLER_ENVIRONMENT=production (Secure cookies and a real key are enforced)
+#   * uploads in the "mediadata" volume; MinIO only with COMPOSE_PROFILES=s3
 #
 #   docker compose -f docker-compose.prod.yml --env-file .env.production build
 #   docker compose -f docker-compose.prod.yml --env-file .env.production run --rm migrate
@@ -24,8 +25,9 @@ x-app: &app
     PIKIRLER_COOKIE_SECURE: "true"
     PIKIRLER_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
     PIKIRLER_REDIS_URL: redis://redis:6379/0
-    PIKIRLER_S3_ENDPOINT_URL: http://minio:9000
     FORWARDED_ALLOW_IPS: "*"  # only nginx can reach the api on the internal network
+  volumes:
+    - mediadata:/srv/data/media
   networks: [internal]
 
 services:
@@ -61,7 +63,8 @@ services:
     networks: [internal]
 
   minio:
-    image: minio/minio:latest  # pin a RELEASE.* tag for production
+    image: ${MINIO_IMAGE:-minio/minio:latest}  # pin a release tag for production
+    profiles: ["s3"]
     restart: unless-stopped
     command: ["server", "/data"]
     environment:
@@ -96,6 +99,7 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
+        required: false
 
   worker:
     <<: *app
@@ -135,4 +139,5 @@ networks:
 volumes:
   pgdata:
   redisdata:
+  mediadata:
   miniodata:

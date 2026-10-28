@@ -5,10 +5,15 @@ Archivo, нулевые радиусы, 2px-линейки), с тёмно-си�
 красного. React 18 + TypeScript + Vite, без UI-библиотек и роутера. Бэкенд —
 [`../backend`](../backend).
 
-## Запуск в разработке
+## Запуск
 
-Нужны Node 20+ и запущенный бэкенд (`docker compose up -d` в `../backend`,
-API на `127.0.0.1:8460`).
+Обычно ничего делать не нужно: `docker compose up` в `../backend` собирает этот
+интерфейс в контейнер `web` (nginx раздаёт сборку и проксирует `/api`) и
+открывает его на http://localhost:5470. См. `Dockerfile` и `docker/nginx.conf`.
+
+## Разработка с горячей перезагрузкой
+
+Нужны Node 20+ и запущенный бэкенд (API на `127.0.0.1:8460`).
 
 ```bash
 npm install
@@ -18,23 +23,19 @@ npm install
 npm run dev
 ```
 
-Откройте http://localhost:5470. Vite проксирует `/api` на бэкенд, поэтому
+Откройте http://localhost:5480. Vite проксирует `/api` на бэкенд, поэтому
 браузер работает с одним origin: cookie сессии и CSRF работают без CORS.
 Другой адрес API — переменная `PIKIRLER_API_URL`.
 
 Войти можно владельцем, созданным в бэкенде (`pikirler create-owner`).
 Регистрации нет.
 
-## Сборка и продакшен
+## Продакшен
 
-```bash
-npm run build
-```
-
-Готовые файлы окажутся в `dist/`. Prod-nginx бэкенда раздаёт их с того же
-домена, что и API (`docker-compose.prod.yml` монтирует `../frontend/dist`,
-путь меняется через `FRONTEND_DIST`). CSP, HSTS и кэширование настроены в
-`../backend/deploy/nginx.conf`.
+Образ собирается из `Dockerfile` вместе с остальным стеком
+(`docker-compose.prod.yml`, сервис `nginx`). В продакшене его конфигурацию
+заменяет `../backend/deploy/nginx.conf` с TLS, HSTS, CSP и лимитами запросов.
+Отдельно собрать файлы можно командой `npm run build` — они окажутся в `dist/`.
 
 ## Типы API
 

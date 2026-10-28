@@ -36,8 +36,7 @@ AI необязателен: без него всё работает, кроме
 
 | Программа | Версия | Зачем |
 |---|---|---|
-| [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) или Docker Engine + Compose v2 (Linux) | 24+ | база данных, API, хранилище файлов |
-| [Node.js](https://nodejs.org/) | 20+ | веб-интерфейс |
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) (Windows/macOS) или Docker Engine + Compose v2 (Linux) | 24+ | всё: интерфейс, API, база данных, хранилище файлов |
 | [Git](https://git-scm.com/) | любая | скачать проект |
 | Python | 3.8+ | один раз — сгенерировать пароли (можно и вручную) |
 
@@ -74,7 +73,7 @@ python backend/scripts/init_env.py --timezone Asia/Ashgabat
 - `PIKIRLER_SECRET_KEY` — не меньше 64 случайных символов.
 </details>
 
-### 3. Запустить сервер
+### 3. Запустить Pikirler
 
 Docker Desktop должен быть запущен.
 
@@ -83,9 +82,9 @@ docker compose -f backend/docker-compose.yml up -d --build
 ```
 
 Первая сборка занимает от нескольких минут до получаса на медленном интернете:
-скачиваются образы, ffmpeg и Python-пакеты. Следующие запуски берут всё из
-кэша и проходят за секунды. Поднимутся PostgreSQL, Redis, RustFS
-(хранилище файлов), API и фоновый воркер; миграции базы применятся
+скачиваются образы, ffmpeg, Python- и npm-пакеты. Следующие запуски берут всё
+из кэша и проходят за секунды. Поднимутся PostgreSQL, Redis, RustFS (хранилище
+файлов), API, фоновый воркер и веб-интерфейс; миграции базы применятся
 автоматически, приватный бакет для файлов создастся сам. Проверка:
 
 ```bash
@@ -104,18 +103,11 @@ docker compose -f backend/docker-compose.yml ps
 docker compose -f backend/docker-compose.yml run --rm api pikirler create-owner --email you@example.com --name "Adyňyz"
 ```
 
-### 5. Запустить веб-интерфейс
-
-```bash
-npm --prefix frontend install
-```
-
-```bash
-npm --prefix frontend run dev
-```
+### 5. Открыть Pikirler
 
 Откройте **http://localhost:5470** и войдите с email и паролем из шага 4.
-Язык интерфейса выбирается прямо на экране входа.
+Язык интерфейса выбирается прямо на экране входа. Устанавливать Node.js не
+нужно: интерфейс собирается и работает в контейнере `web`.
 
 ### 6. Первые шаги
 
@@ -132,7 +124,7 @@ npm --prefix frontend run dev
 
 | Сервис | Порт |
 |---|---|
-| Веб-интерфейс (dev) | 5470 |
+| Веб-интерфейс | 5470 |
 | API и его документация `/api/v1/pikirler/docs` | 8460 |
 | PostgreSQL | 5460 |
 | Redis | 6460 |
@@ -206,17 +198,7 @@ docker compose -f backend/docker-compose.yml up -d api worker
 2. Укажите домен в `backend/deploy/nginx.conf` (`server_name`) и положите
    сертификаты в `backend/deploy/certs/` как `fullchain.pem` и `privkey.pem`.
 
-3. Соберите интерфейс:
-
-   ```bash
-   npm --prefix frontend ci
-   ```
-
-   ```bash
-   npm --prefix frontend run build
-   ```
-
-4. Соберите образы, примените миграции и запустите стек:
+3. Соберите образы (бэкенд и интерфейс), примените миграции и запустите стек:
 
    ```bash
    docker compose -f backend/docker-compose.prod.yml --env-file backend/.env.production build
@@ -230,7 +212,7 @@ docker compose -f backend/docker-compose.yml up -d api worker
    docker compose -f backend/docker-compose.prod.yml --env-file backend/.env.production up -d
    ```
 
-5. Создайте владельца:
+4. Создайте владельца:
 
    ```bash
    docker compose -f backend/docker-compose.prod.yml --env-file backend/.env.production run --rm api pikirler create-owner --email you@example.com
@@ -245,8 +227,8 @@ Jemşit описаны в [backend/docs/OPERATIONS.md](backend/docs/OPERATIONS.m
 git pull
 ```
 
-После этого повторите шаги 3 и 4: сборку интерфейса, сборку образов, миграции и
-`up -d`. На своём компьютере достаточно
+После этого повторите шаг 3: сборку образов, миграции и `up -d`. На своём
+компьютере достаточно
 `docker compose -f backend/docker-compose.yml up -d --build`: миграции
 применятся сами.
 
@@ -260,8 +242,8 @@ git pull
 | `context deadline exceeded`, `DeadlineExceeded`, `TLS handshake timeout` при скачивании или сборке | Docker не дождался ответа от Docker Hub — медленная или нестабильная сеть. Повторите ту же команду: уже скачанное берётся из кэша. Если повторяется, подключите зеркало реестра (Docker Desktop → Settings → Docker Engine → `"registry-mirrors"`) или VPN. |
 | `password authentication failed for user "pikirler"` | База уже создана со старым паролем — так бывает, если `init_env.py` запускали повторно. Если данных в ней ещё нет: `docker compose -f backend/docker-compose.yml down -v`, затем снова `up -d --build`. **`down -v` удаляет все данные.** |
 | `pull access denied for minio/mc` | Старая версия проекта использовала MinIO, чьи образы больше не раздаются. Выполните `git pull`, удалите `backend/.env`, снова запустите `python backend/scripts/init_env.py` и `docker compose … up -d --build`. |
-| `port is already allocated` | Порт занят другой программой — поменяйте `*_PORT` в `backend/.env` и перезапустите. Если поменяли порт API, запускайте интерфейс с `PIKIRLER_API_URL=http://127.0.0.1:<порт>`. |
-| Интерфейс открывается, но вход не проходит | Проверьте, что API работает: http://127.0.0.1:8460/api/v1/pikirler/health/ready |
+| `port is already allocated` | Порт занят другой программой — поменяйте `*_PORT` в `backend/.env` (интерфейс — `WEB_PORT`) и перезапустите. |
+| Интерфейс открывается, но вход не проходит | Проверьте, что API работает: http://127.0.0.1:8460/api/v1/pikirler/health/ready и `docker compose -f backend/docker-compose.yml ps`. |
 | Забыли пароль | `docker compose -f backend/docker-compose.yml run --rm api pikirler set-password --email you@example.com` |
 | «Слишком много попыток» | Вход временно заблокирован после серии ошибок — подождите 15 минут. |
 | Микрофон не работает | Браузер даёт доступ к микрофону только на `localhost` или по HTTPS. |
@@ -271,6 +253,8 @@ git pull
 
 - Тесты бэкенда (против настоящих PostgreSQL, Redis и RustFS):
   `docker compose -f backend/docker-compose.yml run --rm api pytest`
+- Фронтенд с горячей перезагрузкой (нужен Node.js 20+): `npm --prefix frontend install`,
+  затем `npm --prefix frontend run dev` — http://localhost:5480, API берётся из запущенного стека.
 - Проверка типов фронтенда: `npm --prefix frontend run typecheck`
 - Документация: [архитектура](backend/docs/ARCHITECTURE.md),
   [API](backend/docs/API.md), [эксплуатация](backend/docs/OPERATIONS.md),

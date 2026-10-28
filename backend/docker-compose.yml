@@ -1,7 +1,8 @@
 # Local development stack. Production: docker-compose.prod.yml.
 #
 #   python scripts/init_env.py        # .env with random secrets
-#   docker compose up -d --build      # postgres, redis, rustfs, migrate, api, worker
+#   docker compose up -d --build      # postgres, redis, rustfs, migrate, api, worker, web
+#   open http://localhost:5470          # the web interface (WEB_PORT)
 #   docker compose run --rm api pytest
 #
 # Uploaded files go to RustFS (S3-compatible); storage-init creates the private
@@ -132,6 +133,18 @@ services:
         condition: service_healthy
       storage-init:
         condition: service_completed_successfully
+
+  # The web interface: built frontend + nginx proxying /api to the api service.
+  web:
+    build:
+      context: ../frontend
+    image: pikirler-web:dev
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${WEB_PORT:-5470}:80"
+    depends_on:
+      api:
+        condition: service_healthy
 
 volumes:
   pgdata:

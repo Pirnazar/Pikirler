@@ -1,9 +1,11 @@
 import { useEffect, useState } from "react";
 import { del, errorMessage, get, post, type Page, type Relation, type SearchResponse, type Thought } from "../api/client";
 import { useApp } from "../app/context";
+import { useI18n } from "../i18n";
 import { short, snip } from "../lib/format";
 
 export function ConfirmDelete({ snippet, onConfirm, onCancel }: { snippet: string; onConfirm: () => void; onCancel: () => void }) {
+  const { t } = useI18n();
   useEffect(() => {
     const fn = (e: KeyboardEvent) => e.key === "Escape" && onCancel();
     window.addEventListener("keydown", fn);
@@ -11,14 +13,14 @@ export function ConfirmDelete({ snippet, onConfirm, onCancel }: { snippet: strin
   }, [onCancel]);
   return (
     <div className="dialog-backdrop" style={{ zIndex: 55 }} onClick={onCancel}>
-      <div role="alertdialog" aria-modal="true" aria-label="Delete thought" className="dialog" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
-        <div className="dialog-title">Delete this thought?</div>
+      <div role="alertdialog" aria-modal="true" aria-label={t("delete_q")} className="dialog" style={{ maxWidth: 420 }} onClick={(e) => e.stopPropagation()}>
+        <div className="dialog-title">{t("delete_q")}</div>
         <p style={{ fontSize: 14, color: "var(--color-neutral-700)", margin: 0 }}>
-          “{snippet}” — it goes to the trash; you can undo right away or restore it from My Thoughts for 30 days.
+          {t("delete_body", { snippet })}
         </p>
         <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-          <button className="btn btn-primary" onClick={onConfirm} autoFocus>Delete</button>
-          <button className="btn btn-secondary" onClick={onCancel}>Keep it</button>
+          <button className="btn btn-primary" onClick={onConfirm} autoFocus>{t("delete")}</button>
+          <button className="btn btn-secondary" onClick={onCancel}>{t("keep_it")}</button>
         </div>
       </div>
     </div>
@@ -35,6 +37,7 @@ interface Candidate {
  *  AI suggestions live elsewhere and never become links without a click. */
 export function ConnectDialog({ thought, onClose }: { thought: Thought; onClose: () => void }) {
   const app = useApp();
+  const { t } = useI18n();
   const [q, setQ] = useState("");
   const [cands, setCands] = useState<Candidate[] | null>(null);
   const [rels, setRels] = useState<Relation[]>([]);
@@ -46,21 +49,21 @@ export function ConnectDialog({ thought, onClose }: { thought: Thought; onClose:
 
   useEffect(() => {
     const ac = new AbortController();
-    const t = setTimeout(async () => {
+    const timer = setTimeout(async () => {
       try {
         if (q.trim()) {
           const r = await get<SearchResponse>("/search", { q: q.trim(), limit: 12 }, ac.signal);
           setCands(r.results.map((x) => ({ id: x.thought_id, created_at: x.created_at, text: x.snippet })));
         } else {
           const p = await get<Page<Thought>>("/thoughts", { limit: 12 }, ac.signal);
-          setCands(p.items.map((x) => ({ id: x.id, created_at: x.created_at, text: x.content || "Voice note" })));
+          setCands(p.items.map((x) => ({ id: x.id, created_at: x.created_at, text: x.content || t("voice_note") })));
         }
       } catch {
         if (!ac.signal.aborted) setCands([]);
       }
     }, q ? 250 : 0);
     return () => {
-      clearTimeout(t);
+      clearTimeout(timer);
       ac.abort();
     };
   }, [q]);
@@ -94,14 +97,14 @@ export function ConnectDialog({ thought, onClose }: { thought: Thought; onClose:
 
   return (
     <div className="dialog-backdrop" onClick={onClose}>
-      <div role="dialog" aria-modal="true" aria-label="Connect thoughts" className="dialog"
+      <div role="dialog" aria-modal="true" aria-label={t("connect_thoughts")} className="dialog"
         style={{ maxWidth: 520, maxHeight: "80%" }} onClick={(e) => e.stopPropagation()}>
-        <div className="dialog-title">Connect thoughts</div>
-        <p style={{ fontSize: 13, color: "var(--color-neutral-700)", margin: 0 }}>“{snip(thought.content || "Voice note", 90)}”</p>
-        <input className="input" type="search" placeholder="Find a thought…" aria-label="Find a thought" value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
+        <div className="dialog-title">{t("connect_thoughts")}</div>
+        <p style={{ fontSize: 13, color: "var(--color-neutral-700)", margin: 0 }}>“{snip(thought.content || t("voice_note"), 90)}”</p>
+        <input className="input" type="search" placeholder={t("find_thought")} aria-label={t("find_thought")} value={q} onChange={(e) => setQ(e.target.value)} autoFocus />
         <div style={{ overflowY: "auto" }}>
-          {cands === null && <div className="pk-loading-line" style={{ padding: "10px 0" }}>Looking…</div>}
-          {cands?.length === 0 && <div className="pk-muted" style={{ padding: "10px 0", fontSize: 14 }}>No thoughts found.</div>}
+          {cands === null && <div className="pk-loading-line" style={{ padding: "10px 0" }}>{t("looking")}</div>}
+          {cands?.length === 0 && <div className="pk-muted" style={{ padding: "10px 0", fontSize: 14 }}>{t("no_thoughts_found")}</div>}
           {cands?.filter((c) => c.id !== thought.id).map((c) => {
             const on = !!linkOf(c.id);
             return (
@@ -116,13 +119,13 @@ export function ConnectDialog({ thought, onClose }: { thought: Thought; onClose:
                     color: on ? "var(--color-bg)" : "var(--color-text)", borderColor: on ? "var(--color-accent)" : "var(--color-text)",
                     padding: "5px 10px", fontSize: 12, fontWeight: 600, cursor: "pointer", flex: "none",
                   }}>
-                  {on ? "Connected" : "Connect"}
+                  {on ? t("connected") : t("connect")}
                 </button>
               </div>
             );
           })}
         </div>
-        <div><button className="btn btn-primary" onClick={onClose}>Done</button></div>
+        <div><button className="btn btn-primary" onClick={onClose}>{t("done")}</button></div>
       </div>
     </div>
   );

@@ -3,6 +3,7 @@ import { errorMessage, request, type Settings } from "../api/client";
 import type { components } from "../api/schema";
 import { emit } from "../app/bus";
 import { useApp } from "../app/context";
+import { useI18n, type I18n } from "../i18n";
 import { LANGS, mmss } from "../lib/format";
 
 type VoiceNoteOut = components["schemas"]["VoiceNoteOut"];
@@ -10,11 +11,11 @@ type Status = "starting" | "rec" | "paused" | "stopped" | "denied";
 
 const MIME_CANDIDATES = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus"];
 
-function asrNote(settings: Settings | null): string {
+function asrNote(settings: Settings | null, t: I18n["t"]): string {
   const asr = (settings?.providers as Record<string, { provider?: string; external?: boolean }> | undefined)?.asr;
-  if (!asr || asr.provider === "disabled") return "Transcription isn't configured on the server yet — the original audio is kept, and you can add a note now.";
-  if (asr.external && !settings?.ai_external_enabled) return "Server transcription needs “AI features” turned on in Settings. The original audio is always kept.";
-  return "The server transcribes it after saving. The original audio is always kept.";
+  if (!asr || asr.provider === "disabled") return t("asr_off");
+  if (asr.external && !settings?.ai_external_enabled) return t("asr_needs_consent");
+  return t("asr_on");
 }
 
 /** Voice thought: records with MediaRecorder and uploads the audio as-is.
@@ -22,6 +23,7 @@ function asrNote(settings: Settings | null): string {
  *  so nothing is sent to a third party from here. */
 export function Recorder({ onClose }: { onClose: () => void }) {
   const app = useApp();
+  const { t } = useI18n();
   const [status, setStatus] = useState<Status>("starting");
   const [secs, setSecs] = useState(0);
   const [levels, setLevels] = useState<number[]>(() => Array(44).fill(0.05));
@@ -117,7 +119,7 @@ export function Recorder({ onClose }: { onClose: () => void }) {
     try {
       const r = await request<VoiceNoteOut>("POST", "/voice/notes", { body: fd });
       emit({ type: "created", thought: r.thought });
-      app.toast(r.transcription_unavailable ? "Voice thought saved — transcription is off" : "Voice thought saved — transcribing");
+      app.toast(r.transcription_unavailable ? t("voice_saved_no_asr") : t("voice_saved"));
       onClose();
     } catch (e) {
       app.toast(errorMessage(e));
@@ -126,12 +128,12 @@ export function Recorder({ onClose }: { onClose: () => void }) {
   }
 
   const stopped = status === "stopped";
-  const label = status === "rec" ? "Recording" : status === "paused" ? "Paused" : stopped ? "Recorded · " + mmss(secs)
-    : status === "denied" ? "Microphone unavailable" : "Starting…";
+  const label = status === "rec" ? t("rec_recording") : status === "paused" ? t("rec_paused") : stopped ? t("rec_recorded", { time: mmss(secs) })
+    : status === "denied" ? t("rec_no_mic") : t("rec_starting");
 
   return (
     <div className="dialog-backdrop">
-      <div role="dialog" aria-modal="true" aria-label="Voice thought" className="dialog" style={{ maxWidth: 460 }}>
+      <div role="dialog" aria-modal="true" aria-label={t("voice_thought")} className="dialog" style={{ maxWidth: 460 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, fontWeight: 800, letterSpacing: ".1em", textTransform: "uppercase" }}>
           <span className={"pk-rec-dot" + (status === "rec" ? " live" : "")} style={stopped ? { background: "var(--color-text)" } : undefined} />
           <span style={{ flex: 1 }}>{label}</span>
@@ -141,30 +143,30 @@ export function Recorder({ onClose }: { onClose: () => void }) {
           {levels.map((b, i) => <span key={i} style={{ height: Math.round(4 + b * 64) }} />)}
         </div>
         {status === "denied" && (
-          <p className="pk-error" style={{ margin: 0 }}>Allow microphone access in the browser to record a voice thought.</p>
+          <p className="pk-error" style={{ margin: 0 }}>{t("rec_allow_mic")}</p>
         )}
-        <div role="group" aria-label="Language" className="pk-seg">
+        <div role="group" aria-label={t("language")} className="pk-seg">
           {(["auto", "tk", "ru", "en", "zh"] as const).map((k) => (
-            <button key={k} aria-pressed={lang === k} onClick={() => setLang(k)}>{k === "auto" ? "Auto" : LANGS[k]}</button>
+            <button key={k} aria-pressed={lang === k} onClick={() => setLang(k)}>{k === "auto" ? t("lang_auto") : LANGS[k]}</button>
           ))}
         </div>
         <div className="field">
-          <label htmlFor="pk-note">Note (optional)</label>
-          <textarea id="pk-note" className="input" rows={3} placeholder="Add a few words — or leave it to the transcript." value={note}
+          <label htmlFor="pk-note">{t("note_optional")}</label>
+          <textarea id="pk-note" className="input" rows={3} placeholder={t("note_placeholder")} value={note}
             onChange={(e) => setNote(e.target.value)} style={{ fontSize: 15, minHeight: 72 }} />
         </div>
-        <p style={{ fontSize: 12, color: "var(--color-neutral-600)", margin: 0 }}>{asrNote(app.settings)}</p>
+        <p style={{ fontSize: 12, color: "var(--color-neutral-600)", margin: 0 }}>{asrNote(app.settings, t)}</p>
         {src && <audio controls src={src} style={{ width: "100%" }} />}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-          {status === "rec" && <button className="btn btn-secondary" style={{ minHeight: 44 }} onClick={() => { mr.current?.pause(); setStatus("paused"); }}>Pause</button>}
-          {status === "paused" && <button className="btn btn-secondary" style={{ minHeight: 44 }} onClick={() => { mr.current?.resume(); setStatus("rec"); }}>Resume</button>}
+          {status === "rec" && <button className="btn btn-secondary" style={{ minHeight: 44 }} onClick={() => { mr.current?.pause(); setStatus("paused"); }}>{t("pause")}</button>}
+          {status === "paused" && <button className="btn btn-secondary" style={{ minHeight: 44 }} onClick={() => { mr.current?.resume(); setStatus("rec"); }}>{t("resume")}</button>}
           {(status === "rec" || status === "paused") && (
             <button className="btn btn-primary" style={{ minHeight: 44, gap: 8 }} onClick={() => mr.current?.stop()}>
-              <span style={{ width: 10, height: 10, background: "currentColor" }} />Stop
+              <span style={{ width: 10, height: 10, background: "currentColor" }} />{t("stop")}
             </button>
           )}
-          {stopped && <button className="btn btn-primary" style={{ minHeight: 44 }} disabled={saving} onClick={save}>{saving ? "Saving…" : "Save voice thought"}</button>}
-          <button className="btn btn-ghost" style={{ minHeight: 44, marginLeft: "auto" }} onClick={onClose}>Discard</button>
+          {stopped && <button className="btn btn-primary" style={{ minHeight: 44 }} disabled={saving} onClick={save}>{saving ? t("saving") : t("save_voice")}</button>}
+          <button className="btn btn-ghost" style={{ minHeight: 44, marginLeft: "auto" }} onClick={onClose}>{t("discard")}</button>
         </div>
       </div>
     </div>

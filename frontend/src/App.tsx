@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ApiError, AUTH_EVENT, request, type AuthEventDetail, type Session } from "./api/client";
+import { I18nProvider, initialLang, useLangSetter, type Lang } from "./i18n";
 import { Lock, type LockMode } from "./screens/Lock";
 import { Shell } from "./Shell";
 
@@ -20,6 +21,8 @@ function initialTheme(): "light" | "dark" {
 export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: "boot" });
   const [theme, setThemeState] = useState(initialTheme);
+  const [lang, setLangState] = useState<Lang>(initialLang);
+  const setLang = useLangSetter(setLangState);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -52,26 +55,30 @@ export function App() {
     setTimeout(() => setPhase((p) => (p.kind === "ready" ? { ...p, leaving: false } : p)), 820);
   };
 
-  if (phase.kind === "boot") return <div className="pk-boot pk-loading-line">Pikirler</div>;
-
   return (
-    <div className="pk-root">
-      {phase.kind === "ready" && (
-        <Shell
-          session={phase.session}
-          theme={theme}
-          setTheme={setTheme}
-          onLocked={(mode) => setPhase({ kind: "locked", mode })}
-        />
+    <I18nProvider lang={lang} setLang={setLang}>
+      {phase.kind === "boot" ? (
+        <div className="pk-boot pk-loading-line">Pikirler</div>
+      ) : (
+        <div className="pk-root">
+          {phase.kind === "ready" && (
+            <Shell
+              session={phase.session}
+              theme={theme}
+              setTheme={setTheme}
+              onLocked={(mode) => setPhase({ kind: "locked", mode })}
+            />
+          )}
+          {(phase.kind === "locked" || phase.leaving) && (
+            <Lock
+              mode={phase.kind === "locked" ? phase.mode : "magic"}
+              leaving={phase.kind === "ready" && phase.leaving}
+              onReady={ready}
+              onModeChange={(mode) => setPhase({ kind: "locked", mode })}
+            />
+          )}
+        </div>
       )}
-      {(phase.kind === "locked" || phase.leaving) && (
-        <Lock
-          mode={phase.kind === "locked" ? phase.mode : "magic"}
-          leaving={phase.kind === "ready" && phase.leaving}
-          onReady={ready}
-          onModeChange={(mode) => setPhase({ kind: "locked", mode })}
-        />
-      )}
-    </div>
+    </I18nProvider>
   );
 }

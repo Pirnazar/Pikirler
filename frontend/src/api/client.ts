@@ -1,3 +1,4 @@
+import { translate } from "../i18n";
 import type { components } from "./schema";
 
 type S = components["schemas"];
@@ -103,7 +104,7 @@ export async function request<T>(method: string, path: string, opts: RequestOpti
     });
   } catch (e) {
     if ((e as Error).name === "AbortError") throw e;
-    throw new ApiError(0, "network", "Can't reach Pikirler. Check your connection.");
+    throw new ApiError(0, "network", translate("e_network"));
   }
   if (!resp.ok) {
     const err = await toError(resp);
@@ -127,28 +128,28 @@ export const del = <T = void>(path: string) => request<T>("DELETE", path);
 
 /** Human message for an error from any call. */
 export function errorMessage(e: unknown): string {
-  if (!(e instanceof ApiError)) return "Something went wrong. Try again.";
+  if (!(e instanceof ApiError)) return translate("e_generic");
   switch (e.code) {
     case "network":
       return e.message;
     case "external_ai_disabled":
-      return "AI is off. Turn on “AI features” in Settings to let Pikirler send selected thoughts to the AI provider.";
+      return translate("e_ai_off");
     case "ai_disabled":
     case "embeddings_disabled":
-      return "AI is not configured on the server. Your thoughts are untouched.";
+      return translate("e_ai_unconfigured");
     case "asr_disabled":
-      return "Transcription is not configured on the server. The audio is kept.";
+      return translate("e_asr_unconfigured");
     case "provider_unavailable":
-      return "Couldn't reach the AI right now. Try again in a moment.";
+      return translate("e_provider");
     case "ai_quota_exceeded":
-      return "Today's AI limit is reached. It resets tomorrow.";
+      return translate("e_quota");
     case "ai_bad_response":
-      return "The AI answered in an unexpected way. Try again.";
+      return translate("e_bad_ai");
     case "rate_limited":
     case "account_locked":
-      return e.retryAfter ? `Too many attempts. Try again in ${Math.ceil(e.retryAfter / 60)} min.` : "Too many attempts. Try again later.";
+      return e.retryAfter ? translate("e_rate_min", { n: Math.ceil(e.retryAfter / 60) }) : translate("e_rate");
     case "version_conflict":
-      return "This thought was changed elsewhere. Reload and try again.";
+      return translate("e_conflict");
     default:
       return e.message;
   }

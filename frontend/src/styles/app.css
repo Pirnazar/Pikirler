@@ -448,3 +448,8 @@ mark { background: var(--color-accent-200); color: inherit; }
 .pk-boot { height: 100%; display: grid; place-items: center; }
 
 .accent-stroke { stroke: var(--color-accent); }
+.pk-day .c-short { display: none; }
+@media (max-width: 719px) { .pk-day .c { display: none; } .pk-day .c.c-short { display: block; } }
+.pk-seg.inverted { border-color: color-mix(in srgb, var(--color-bg) 60%, transparent); }
+.pk-seg.inverted button { color: var(--color-bg); }
+.pk-seg.inverted button[aria-pressed="true"] { background: var(--color-bg); color: var(--color-accent); }

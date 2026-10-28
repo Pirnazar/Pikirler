@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { get, type Page, type Thought } from "../api/client";
 import { useApp } from "../app/context";
+import { useI18n } from "../i18n";
 import { usePaged } from "../app/hooks";
 import { Composer } from "../components/Composer";
 import { Empty, Feed } from "../components/Feed";
@@ -8,9 +9,9 @@ import { Header } from "../components/Header";
 import { I, Icon } from "../lib/icons";
 import { short } from "../lib/format";
 
-const FILTERS: [string, string][] = [
-  ["all", "All"], ["thought", "Thoughts"], ["idea", "Ideas"], ["reflection", "Reflections"], ["project", "Projects"], ["media", "Media"],
-];
+const FILTERS = [
+  ["all", "f_all"], ["thought", "f_thoughts"], ["idea", "f_ideas"], ["reflection", "f_reflections"], ["project", "f_projects"], ["media", "f_media"],
+] as const;
 
 function loader(filter: string) {
   return (cursor: string | null, signal: AbortSignal) => {
@@ -34,6 +35,7 @@ function accepts(filter: string, t: Thought): boolean {
 
 export function HomeView() {
   const app = useApp();
+  const { t } = useI18n();
   const [filter, setFilter] = useState("all");
   const feed = usePaged(loader(filter), [filter], { acceptsNew: (t) => accepts(filter, t) });
   const items = feed.items && filter === "all" ? [...feed.pinned, ...feed.items.filter((t) => !feed.pinned.some((p) => p.id === t.id))] : feed.items;
@@ -43,19 +45,19 @@ export function HomeView() {
     <>
       <Header
         title="Pikirler"
-        sub="Baş sahypa · your private timeline"
+        sub={t("home_sub")}
         mark
-        tabs={FILTERS}
+        tabs={FILTERS.map(([k, l]) => [k, t(l)] as [string, string])}
         active={filter}
         onTab={setFilter}
         right={
           <>
-            <button className="pk-square-btn" onClick={() => app.go("search")} aria-label="Search (/)" title="Search ( / )">
+            <button className="pk-square-btn" onClick={() => app.go("search")} aria-label={t("search_kbd")} title={t("search_kbd")}>
               <Icon d={I.search} size="sm" />
             </button>
             {!app.isMobile && (
               <button className="btn btn-primary" style={{ minHeight: 38, gap: 8 }} onClick={() => app.newThought()}>
-                <Icon d={I.plus} size="sm" />New
+                <Icon d={I.plus} size="sm" />{t("nav_new")}
               </button>
             )}
           </>
@@ -68,13 +70,13 @@ export function HomeView() {
         hasMore={feed.hasMore}
         loadingMore={feed.loadingMore}
         more={feed.more}
-        endNote={filter === "all" && last ? "You reached your first thought · " + short(last.created_at) : undefined}
+        endNote={filter === "all" && last ? t("first_thought_end", { date: short(last.created_at) }) : undefined}
         empty={
           filter === "all" ? (
-            <Empty title="Your timeline is empty." body="Write one sentence. That's already a thought — no title, no tags, no folders."
-              cta="Write your first thought" onCta={() => app.newThought()} />
+            <Empty title={t("empty_timeline")} body={t("empty_timeline_body")}
+              cta={t("write_first")} onCta={() => app.newThought()} />
           ) : (
-            <Empty title="Nothing here yet." body="No thoughts match this filter." cta="Show all" onCta={() => setFilter("all")} />
+            <Empty title={t("nothing_here")} body={t("no_match_filter")} cta={t("show_all")} onCta={() => setFilter("all")} />
           )
         }
       />

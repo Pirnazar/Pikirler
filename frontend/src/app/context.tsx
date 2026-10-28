@@ -67,6 +67,12 @@ export function useApp(): AppApi {
   return ctx;
 }
 
-export const TYPE_LABEL: Record<string, string> = {
-  thought: "Thought", idea: "Idea", reflection: "Reflection", journal: "Journal", project: "Project",
-};
+export function typeLabel(t: (k: "type_thought" | "type_idea" | "type_reflection" | "type_journal" | "type_project") => string, type: string): string {
+  switch (type) {
+    case "idea": return t("type_idea");
+    case "reflection": return t("type_reflection");
+    case "journal": return t("type_journal");
+    case "project": return t("type_project");
+    default: return t("type_thought");
+  }
+}

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { errorMessage, post, type Attachment, type Thought } from "../api/client";
 import { uploadFile } from "../api/upload";
 import { emit } from "../app/bus";
-import { useApp } from "../app/context";
+import { typeLabel, useApp } from "../app/context";
+import { useI18n } from "../i18n";
 import { useOnline } from "../app/hooks";
 import { parseTags, snip } from "../lib/format";
 import { I, Icon } from "../lib/icons";
@@ -32,9 +33,10 @@ function readDraft(): string {
  *  draft is kept on this device only, never sent anywhere until published. */
 export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; onClose?: () => void }) {
   const app = useApp();
+  const { t } = useI18n();
   const online = useOnline();
   const [draft, setDraft] = useState(readDraft);
-  const [status, setStatus] = useState(() => (readDraft() ? "Draft restored" : ""));
+  const [status, setStatus] = useState(() => (readDraft() ? t("draft_restored") : ""));
   const [focus, setFocus] = useState(!!readDraft());
   const [type, setType] = useState<"thought" | "idea" | "reflection">("thought");
   const [projectId, setProjectId] = useState("");
@@ -66,7 +68,7 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
       el.style.height = el.scrollHeight + "px";
     }
     setDraft(v);
-    setStatus(v ? "Saving draft…" : "");
+    setStatus(v ? t("draft_saving") : "");
     window.clearTimeout(saveTimer.current);
     saveTimer.current = window.setTimeout(() => {
       try {
@@ -75,7 +77,7 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
       } catch {
         /* storage unavailable */
       }
-      if (v) setStatus("Draft saved on this device");
+      if (v) setStatus(t("draft_saved"));
     }, 600);
   }
 
@@ -102,7 +104,7 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
     try {
       name = new URL(v).hostname.replace(/^www\./, "");
     } catch {
-      return app.toast("That doesn't look like a link");
+      return app.toast(t("not_a_link"));
     }
     setItems((list) => [...list, { key: "l" + Date.now(), kind: "link", name, url: v, progress: 1 }]);
     setLinkVal("");
@@ -150,7 +152,7 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
       if (ta.current) ta.current.style.height = "";
       app.clearComposerPreset();
       if (created.tags.length) app.reloadMeta();
-      app.toast(replyTo ? "Thought continued" : "Thought published");
+      app.toast(replyTo ? t("thought_continued") : t("thought_published"));
       onClose?.();
     } catch (e) {
       app.toast(errorMessage(e));
@@ -175,7 +177,7 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
   }
 
   const expanded = focus || !!draft || items.length > 0 || !!replyTo;
-  const statusText = uploading ? "Uploading…" : failed ? "Remove the file that failed to upload" : !online ? "Offline — draft kept on this device" : status;
+  const statusText = uploading ? t("uploading") : failed ? t("upload_failed_remove") : !online ? t("offline_draft") : status;
   const detected = parseTags(draft);
 
   const hidden = (
@@ -194,14 +196,14 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
             <div className="pk-attachment-img">{p.preview && <img className="grayscale" src={p.preview} alt={p.name} />}</div>
           ) : (
             <div className="pk-attachment-file">
-              <span className="pk-kind">{p.kind === "link" ? "Link" : p.kind === "video" ? "Video" : "File"}</span>
+              <span className="pk-kind">{p.kind === "link" ? t("kind_link") : p.kind === "video" ? t("kind_video") : t("kind_file")}</span>
               <span>{p.name}</span>
             </div>
           )}
           {!p.att && !p.error && p.kind !== "link" && (
             <div className="pk-progress"><div style={{ width: Math.round(p.progress * 100) + "%" }} /></div>
           )}
-          <button className="pk-remove" aria-label="Remove attachment" onClick={() => remove(p)}><Icon d={I.x} size="xs" /></button>
+          <button className="pk-remove" aria-label={t("remove_attachment")} onClick={() => remove(p)}><Icon d={I.x} size="xs" /></button>
         </div>
       ))}
     </div>
@@ -210,29 +212,29 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
   const replyLine = replyTo && (
     <div className="pk-replying" style={variant === "sheet" ? { padding: "10px 16px 0", margin: 0 } : undefined}>
       <Icon d={I.reply} size="xs" className="accent-stroke" />
-      <span>Continuing: <strong>{snip(replyTo.content || "Voice note", 70)}</strong></span>
-      <button className="pk-x-btn" aria-label="Stop continuing" onClick={app.clearComposerPreset}><Icon d={I.x} size="xs" /></button>
+      <span>{t("continuing")} <strong>{snip(replyTo.content || t("voice_note"), 70)}</strong></span>
+      <button className="pk-x-btn" aria-label={t("stop_continuing")} onClick={app.clearComposerPreset}><Icon d={I.x} size="xs" /></button>
     </div>
   );
 
   if (variant === "sheet") {
     return (
-      <div role="dialog" aria-modal="true" aria-label="New thought" className="pk-sheet">
+      <div role="dialog" aria-modal="true" aria-label={t("new_thought")} className="pk-sheet">
         <div className="pk-sheet-head">
-          <button onClick={onClose} style={{ border: 0, background: "none", padding: "10px 4px", cursor: "pointer", fontSize: 15 }}>Cancel</button>
+          <button onClick={onClose} style={{ border: 0, background: "none", padding: "10px 4px", cursor: "pointer", fontSize: 15 }}>{t("cancel")}</button>
           <span style={{ flex: 1, textAlign: "center", fontSize: 12, color: "var(--color-neutral-600)" }}>{statusText}</span>
-          <button className="btn btn-primary" style={{ minHeight: 40 }} disabled={!canPublish} onClick={publish}>Publish</button>
+          <button className="btn btn-primary" style={{ minHeight: 40 }} disabled={!canPublish} onClick={publish}>{t("publish")}</button>
         </div>
         {replyLine}
-        <textarea ref={ta} aria-label="What's on your mind?" placeholder="What's on your mind?" value={draft}
+        <textarea ref={ta} aria-label={t("composer_placeholder")} placeholder={t("composer_placeholder")} value={draft}
           onChange={(e) => changeDraft(e.target.value)} onKeyDown={onKey} />
         {attachments}
         <div className="pk-sheet-tools">
-          <button className="pk-tool" aria-label="Photo" onClick={() => imageIn.current?.click()}><Icon d={I.image} /></button>
-          <button className="pk-tool" aria-label="Hashtag" onClick={insertHash}><Icon d={I.hash} /></button>
-          <button className="pk-tool" aria-label="File" onClick={() => fileIn.current?.click()}><Icon d={I.clip} /></button>
+          <button className="pk-tool" aria-label={t("photo")} onClick={() => imageIn.current?.click()}><Icon d={I.image} /></button>
+          <button className="pk-tool" aria-label={t("hashtag")} onClick={insertHash}><Icon d={I.hash} /></button>
+          <button className="pk-tool" aria-label={t("kind_file")} onClick={() => fileIn.current?.click()}><Icon d={I.clip} /></button>
           <span style={{ flex: 1 }} />
-          <button aria-label="Record voice thought" onClick={app.openRecorder}
+          <button aria-label={t("record_voice")} onClick={app.openRecorder}
             style={{ width: 56, height: 56, display: "grid", placeItems: "center", border: 0, background: "var(--color-accent)", color: "var(--color-bg)", cursor: "pointer" }}>
             <Icon d={I.mic} />
           </button>
@@ -243,30 +245,30 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
   }
 
   return (
-    <section aria-label="New thought" className={"pk-composer" + (expanded ? " expanded" : "")}>
+    <section aria-label={t("new_thought")} className={"pk-composer" + (expanded ? " expanded" : "")}>
       <div className="pk-avatar">{app.initial}</div>
       <div style={{ minWidth: 0 }}>
         {replyLine}
-        <textarea ref={ta} rows={1} aria-label="What's on your mind?" placeholder="What's on your mind?" value={draft}
+        <textarea ref={ta} rows={1} aria-label={t("composer_placeholder")} placeholder={t("composer_placeholder")} value={draft}
           onChange={(e) => changeDraft(e.target.value, e.target)} onFocus={() => setFocus(true)} onKeyDown={onKey} />
         {attachments}
         {linkOpen && (
           <div style={{ display: "flex", gap: 8, margin: "8px 0" }}>
-            <input className="input" type="url" placeholder="Paste a link" aria-label="Link URL" value={linkVal} autoFocus
+            <input className="input" type="url" placeholder={t("paste_link")} aria-label={t("link_url")} value={linkVal} autoFocus
               onChange={(e) => setLinkVal(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLink(); } }} />
-            <button className="btn btn-secondary" onClick={addLink}>Add</button>
+            <button className="btn btn-secondary" onClick={addLink}>{t("add")}</button>
           </div>
         )}
         {expanded && (
           <div className="pk-options">
-            <div role="group" aria-label="Category (optional)" className="pk-seg">
+            <div role="group" aria-label={t("category_optional")} className="pk-seg">
               {(["thought", "idea", "reflection"] as const).map((k) => (
-                <button key={k} aria-pressed={type === k} onClick={() => setType(k)}>{k[0].toUpperCase() + k.slice(1)}</button>
+                <button key={k} aria-pressed={type === k} onClick={() => setType(k)}>{typeLabel(t, k)}</button>
               ))}
             </div>
             {app.projects.length > 0 && (
-              <select className="pk-select" aria-label="Project (optional)" value={projectId} onChange={(e) => setProjectId(e.target.value)}>
-                <option value="">No project</option>
+              <select className="pk-select" aria-label={t("project_optional")} value={projectId} onChange={(e) => setProjectId(e.target.value)}>
+                <option value="">{t("no_project")}</option>
                 {app.projects.filter((p) => p.status !== "archived").map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
             )}
@@ -274,15 +276,15 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
           </div>
         )}
         <div className="pk-toolbar">
-          <button className="pk-tool" title="Image" aria-label="Attach image" onClick={() => imageIn.current?.click()}><Icon d={I.image} /></button>
-          <button className="pk-tool" title="Video" aria-label="Attach video" onClick={() => videoIn.current?.click()}><Icon d={I.video} /></button>
-          <button className="pk-tool" title="Voice thought" aria-label="Record voice thought" onClick={app.openRecorder}><Icon d={I.mic} /></button>
-          <button className="pk-tool" title="File" aria-label="Attach file" onClick={() => fileIn.current?.click()}><Icon d={I.clip} /></button>
-          <button className="pk-tool" title="Link" aria-label="Add link" onClick={() => { setLinkOpen((x) => !x); setFocus(true); }}><Icon d={I.chain} /></button>
-          <button className="pk-tool" title="Hashtag" aria-label="Insert hashtag" onClick={insertHash}><Icon d={I.hash} /></button>
+          <button className="pk-tool" title={t("tool_image")} aria-label={t("attach_image")} onClick={() => imageIn.current?.click()}><Icon d={I.image} /></button>
+          <button className="pk-tool" title={t("kind_video")} aria-label={t("attach_video")} onClick={() => videoIn.current?.click()}><Icon d={I.video} /></button>
+          <button className="pk-tool" title={t("voice_thought")} aria-label={t("record_voice")} onClick={app.openRecorder}><Icon d={I.mic} /></button>
+          <button className="pk-tool" title={t("kind_file")} aria-label={t("attach_file")} onClick={() => fileIn.current?.click()}><Icon d={I.clip} /></button>
+          <button className="pk-tool" title={t("kind_link")} aria-label={t("add_link")} onClick={() => { setLinkOpen((x) => !x); setFocus(true); }}><Icon d={I.chain} /></button>
+          <button className="pk-tool" title={t("hashtag")} aria-label={t("insert_hashtag")} onClick={insertHash}><Icon d={I.hash} /></button>
           <span aria-live="polite" className="pk-draft-status">{statusText}</span>
-          <button className="btn btn-primary" style={{ minHeight: 36 }} disabled={!canPublish} onClick={publish} title="Publish (Ctrl + Enter)">
-            {busy ? "Publishing…" : "Publish"}
+          <button className="btn btn-primary" style={{ minHeight: 36 }} disabled={!canPublish} onClick={publish} title={t("publish_kbd")}>
+            {busy ? t("publishing") : t("publish")}
           </button>
         </div>
         {hidden}

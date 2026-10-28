@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { ApiError, errorMessage, request, type Session } from "../api/client";
+import { LangSwitch } from "../components/LangSwitch";
+import { useI18n } from "../i18n";
 import { I, Icon } from "../lib/icons";
 
 export type LockMode = "login" | "magic";
@@ -12,6 +14,7 @@ export function Lock({ mode, leaving, onReady, onModeChange }: {
   onReady: (s: Session) => void;
   onModeChange: (m: LockMode) => void;
 }) {
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [magic, setMagic] = useState("");
@@ -21,8 +24,8 @@ export function Lock({ mode, leaving, onReady, onModeChange }: {
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError("");
-    if (mode === "login" && (!email.trim() || !password)) return setError("Enter your email and password.");
-    if (mode === "magic" && !magic.trim()) return setError("Enter your magic word to open the space.");
+    if (mode === "login" && (!email.trim() || !password)) return setError(t("err_need_login"));
+    if (mode === "magic" && !magic.trim()) return setError(t("err_need_magic"));
     setBusy(true);
     try {
       if (mode === "login") {
@@ -41,9 +44,9 @@ export function Lock({ mode, leaving, onReady, onModeChange }: {
       }
       setError(
         err instanceof ApiError && err.code === "invalid_credentials"
-          ? "Wrong email or password."
+          ? t("err_bad_login")
           : err instanceof ApiError && err.code === "invalid_magic_word"
-            ? "That's not your magic word."
+            ? t("err_bad_magic")
             : errorMessage(err),
       );
     } finally {
@@ -65,53 +68,52 @@ export function Lock({ mode, leaving, onReady, onModeChange }: {
     <div className={"pk-lock" + (leaving ? " leaving" : "")}>
       <div className="pk-lock-art">
         <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 600, letterSpacing: ".1em", textTransform: "uppercase" }}>
-          <span>Second Brain</span>
-          <span>Private</span>
+          <span>{t("brand_sub")}</span>
+          <span>{t("private")}</span>
         </div>
         <div>
           <div className="pk-lock-word">Pikirler</div>
           <div className="pk-lock-rule" />
-          <div className="pk-lock-tag">Your thoughts. Your timeline. Your second brain.</div>
+          <div className="pk-lock-tag">{t("tagline")}</div>
         </div>
       </div>
       <form className="pk-lock-form" onSubmit={submit} noValidate>
+        <LangSwitch />
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <Icon d={I.lock} className="accent-stroke" />
-          <h2 style={{ fontSize: 28, margin: 0 }}>Your mind, your space.</h2>
+          <h2 style={{ fontSize: 28, margin: 0 }}>{t("lock_title")}</h2>
         </div>
         {mode === "login" ? (
           <>
             <div className="field">
-              <label htmlFor="pk-email">Email</label>
+              <label htmlFor="pk-email">{t("email")}</label>
               <input id="pk-email" className="input" type="email" autoComplete="username" value={email}
                 onChange={(e) => { setEmail(e.target.value); setError(""); }} autoFocus />
             </div>
             <div className="field">
-              <label htmlFor="pk-password">Password</label>
+              <label htmlFor="pk-password">{t("password")}</label>
               <input id="pk-password" className="input" type="password" autoComplete="current-password" placeholder="••••••••"
                 value={password} onChange={(e) => { setPassword(e.target.value); setError(""); }} />
             </div>
           </>
         ) : (
           <div className="field">
-            <label htmlFor="pk-magic">Magic word</label>
+            <label htmlFor="pk-magic">{t("magic_word")}</label>
             <input id="pk-magic" className="input" type="password" autoComplete="off" placeholder="••••••••" value={magic}
               onChange={(e) => { setMagic(e.target.value); setError(""); }} autoFocus />
           </div>
         )}
         {error && <div role="alert" className="pk-error">{error}</div>}
         <button className="btn btn-primary" type="submit" disabled={busy}>
-          {mode === "login" ? (busy ? "Signing in…" : "Sign in") : busy ? "Unlocking…" : "Unlock"}
+          {mode === "login" ? (busy ? t("signing_in") : t("sign_in")) : busy ? t("unlocking") : t("unlock")}
           <Icon d={I.arrow} size="sm" />
         </button>
         <p style={{ fontSize: 12, color: "var(--color-neutral-600)", margin: 0, textWrap: "pretty" } as React.CSSProperties}>
-          {mode === "login"
-            ? "Only the owner can sign in. There is no public sign-up."
-            : "Your session is signed in; the magic word is an extra lock on top of it, never the only one."}
+          {mode === "login" ? t("login_note") : t("magic_note")}
         </p>
         {mode === "magic" && (
           <button type="button" className="btn btn-ghost" onClick={signOut} style={{ alignSelf: "flex-start" }}>
-            Sign out instead
+            {t("sign_out_instead")}
           </button>
         )}
       </form>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Attachment } from "../api/client";
 import { fileSize, firstLink, LANGS, mmss } from "../lib/format";
+import { useI18n } from "../i18n";
 import { I, SolidIcon } from "../lib/icons";
 
 function bars(seed: string, n = 40): number[] {
@@ -17,17 +18,18 @@ function bars(seed: string, n = 40): number[] {
 /** Voice note player: the waveform is decorative (derived from the id); time
  *  and progress come from the real audio element streaming from the API. */
 export function AudioPlayer({ a, large }: { a: Attachment; large?: boolean }) {
+  const { t: tr } = useI18n();
   const ref = useRef<HTMLAudioElement>(null);
   const [playing, setPlaying] = useState(false);
   const [t, setT] = useState(0);
   const [dur, setDur] = useState(a.duration_seconds ?? 0);
   const shape = bars(a.id);
   const prog = dur ? t / dur : 0;
-  const tr = a.transcription;
+  const trn = a.transcription;
   return (
     <div onClick={(e) => e.stopPropagation()}>
       <div className="pk-audio" style={large ? { padding: 12, marginTop: 12 } : undefined}>
-        <button className="pk-play" aria-label={playing ? "Pause voice note" : "Play voice note"} style={large ? { width: 40, height: 40 } : undefined}
+        <button className="pk-play" aria-label={playing ? tr("pause_voice") : tr("play_voice")} style={large ? { width: 40, height: 40 } : undefined}
           onClick={() => {
             const el = ref.current;
             if (!el) return;
@@ -46,15 +48,15 @@ export function AudioPlayer({ a, large }: { a: Attachment; large?: boolean }) {
           onTimeUpdate={(e) => setT(e.currentTarget.currentTime)}
           onLoadedMetadata={(e) => Number.isFinite(e.currentTarget.duration) && setDur(e.currentTarget.duration)} />
       </div>
-      {tr && (
+      {trn && (
         <div className="pk-transcript" style={large ? { fontSize: 15, marginTop: 8 } : undefined}>
           <span className="pk-transcript-label">
-            Transcript · {tr.language ? LANGS[tr.language] ?? tr.language : "Auto-detected"}
-            {large ? " · original audio kept" : ""}
+            {tr("transcript")} · {trn.language ? LANGS[trn.language] ?? trn.language : tr("auto_detected")}
+            {large ? " · " + tr("original_kept") : ""}
           </span>
-          {tr.text ? <div>{tr.text}</div> : (
+          {trn.text ? <div>{trn.text}</div> : (
             <div className="pk-muted">
-              {tr.status === "failed" ? "Transcription failed — the audio is kept." : "Transcribing…"}
+              {trn.status === "failed" ? tr("transcription_failed") : tr("transcribing")}
             </div>
           )}
         </div>

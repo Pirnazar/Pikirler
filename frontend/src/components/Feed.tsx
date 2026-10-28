@@ -1,6 +1,7 @@
 import { useRef, type ReactNode } from "react";
 import type { Thought } from "../api/client";
 import { useThoughtEvents } from "../app/bus";
+import { useI18n } from "../i18n";
 import { ThoughtCard } from "./ThoughtCard";
 
 export function Skeletons({ n = 3 }: { n?: number }) {
@@ -41,6 +42,7 @@ export function Feed({ items, error, hasMore, loadingMore, more, heading, empty,
   empty: ReactNode;
   endNote?: string;
 }) {
+  const { t } = useI18n();
   const fresh = useRef(new Set<string>());
   useThoughtEvents((e) => {
     if (e.type === "created") fresh.current.add(e.thought.id);
@@ -55,7 +57,7 @@ export function Feed({ items, error, hasMore, loadingMore, more, heading, empty,
       {hasMore && (
         <div className="pk-loadmore">
           <button className="btn btn-secondary" disabled={loadingMore} onClick={more}>
-            {loadingMore ? "Loading…" : "Show older thoughts"}
+            {loadingMore ? t("loading") : t("show_older")}
           </button>
         </div>
       )}

@@ -19,15 +19,17 @@ import { MemoriesView } from "./views/Memories";
 import { CalendarView } from "./views/Calendar";
 import { SettingsView } from "./views/Settings";
 import type { LockMode } from "./screens/Lock";
+import { useI18n } from "./i18n";
 
-const NAV: [View, string, string][] = [
-  ["home", "Home", I.home], ["mine", "My Thoughts", I.user], ["bookmarks", "Bookmarks", I.bookmark],
-  ["topics", "Topics", I.hash], ["projects", "Projects", I.folder], ["memories", "Memories", I.history],
-  ["search", "AI Search", I.spark], ["calendar", "Calendar", I.calendar], ["settings", "Settings", I.settings],
-];
-const MOBILE_NAV: [View | "new", string, string][] = [
-  ["home", "Home", I.home], ["search", "Search", I.search], ["new", "New", I.plus], ["memories", "Memories", I.history], ["mine", "Profile", I.user],
-];
+const NAV = [
+  ["home", "nav_home", I.home], ["mine", "nav_mine", I.user], ["bookmarks", "nav_bookmarks", I.bookmark],
+  ["topics", "nav_topics", I.hash], ["projects", "nav_projects", I.folder], ["memories", "nav_memories", I.history],
+  ["search", "nav_search", I.spark], ["calendar", "nav_calendar", I.calendar], ["settings", "nav_settings", I.settings],
+] as const;
+const MOBILE_NAV = [
+  ["home", "nav_home", I.home], ["search", "nav_search_short", I.search], ["new", "nav_new", I.plus],
+  ["memories", "nav_memories", I.history], ["mine", "nav_profile", I.user],
+] as const;
 
 export function Shell({ session, theme, setTheme, onLocked }: {
   session: Session;
@@ -35,6 +37,7 @@ export function Shell({ session, theme, setTheme, onLocked }: {
   setTheme: (t: "light" | "dark") => void;
   onLocked: (mode: LockMode) => void;
 }) {
+  const { t } = useI18n();
   const isMobile = useMedia("(max-width: 719px)");
   const online = useOnline();
   const [route, setRoute] = useState<Route>(() => parseHash());
@@ -114,35 +117,35 @@ export function Shell({ session, theme, setTheme, onLocked }: {
     }
   }, [settings, session, onLocked, signOut]);
 
-  const toggleBookmark = useCallback(async (t: Thought) => {
+  const toggleBookmark = useCallback(async (th: Thought) => {
     try {
-      const updated = await request<Thought>(t.is_bookmarked ? "DELETE" : "POST", `/thoughts/${t.id}/bookmark`);
+      const updated = await request<Thought>(th.is_bookmarked ? "DELETE" : "POST", `/thoughts/${th.id}/bookmark`);
       emit({ type: "updated", thought: updated });
-      if (updated.is_bookmarked) toast("Saved to bookmarks");
+      if (updated.is_bookmarked) toast(t("saved_to_bookmarks"));
     } catch {
-      toast("Couldn't update the bookmark");
+      toast(t("bookmark_failed"));
     }
-  }, [toast]);
+  }, [toast, t]);
 
-  const doDelete = useCallback(async (t: Thought) => {
+  const doDelete = useCallback(async (th: Thought) => {
     setDeleteFor(null);
     try {
-      await del(`/thoughts/${t.id}`);
+      await del(`/thoughts/${th.id}`);
     } catch {
-      return toast("Couldn't delete the thought");
+      return toast(t("delete_failed"));
     }
-    emit({ type: "deleted", id: t.id });
-    if (parseHash().view === "detail" && parseHash().arg === t.id) back();
-    toast("Thought deleted", async () => {
+    emit({ type: "deleted", id: th.id });
+    if (parseHash().view === "detail" && parseHash().arg === th.id) back();
+    toast(t("thought_deleted"), async () => {
       setToast(null);
       try {
-        const restored = await post<Thought>(`/thoughts/${t.id}/restore`);
+        const restored = await post<Thought>(`/thoughts/${th.id}/restore`);
         emit({ type: "restored", thought: restored });
       } catch {
-        toast("Couldn't restore — it is still in the trash under My Thoughts");
+        toast(t("restore_failed"));
       }
     });
-  }, [toast, back]);
+  }, [toast, back, t]);
 
   const llm = (settings?.providers as Record<string, { provider?: string; external?: boolean }> | undefined)?.llm;
   const aiAvailable = !!llm && llm.provider !== "disabled" && (!llm.external || !!settings?.ai_external_enabled);
@@ -202,44 +205,44 @@ export function Shell({ session, theme, setTheme, onLocked }: {
   return (
     <AppContext.Provider value={api}>
       <div className="pk-shell">
-        <aside className="pk-sidebar" aria-label="Navigation">
-          <button className="pk-brand" onClick={() => go("home")} aria-label="Pikirler home">
+        <aside className="pk-sidebar" aria-label={t("navigation")}>
+          <button className="pk-brand" onClick={() => go("home")} aria-label={t("home_link")}>
             <span className="pk-mark">P</span>
             <span className="pk-brand-text pk-hide-compact">
               <span className="pk-brand-name">Pikirler</span>
-              <span className="pk-brand-sub">Second Brain</span>
+              <span className="pk-brand-sub">{t("brand_sub")}</span>
             </span>
           </button>
           <nav className="pk-nav">
             {NAV.map(([k, label, icon]) => (
-              <button key={k} className="pk-nav-item" aria-current={activeNav === k ? "page" : undefined} title={label} onClick={() => go(k)}>
+              <button key={k} className="pk-nav-item" aria-current={activeNav === k ? "page" : undefined} title={t(label)} onClick={() => go(k)}>
                 <Icon d={icon} />
-                <span className="pk-nav-label pk-hide-compact">{label}</span>
+                <span className="pk-nav-label pk-hide-compact">{t(label)}</span>
                 {k === "search" && <span className="pk-nav-count pk-hide-compact">/</span>}
               </button>
             ))}
           </nav>
-          <button className="btn btn-primary pk-new-btn" onClick={() => newThought()} title="New thought (N)">
+          <button className="btn btn-primary pk-new-btn" onClick={() => newThought()} title={t("new_thought_kbd")}>
             <Icon d={I.plus} size="sm" />
-            <span className="pk-hide-compact" style={{ flex: 1, textAlign: "left" }}>New thought</span>
+            <span className="pk-hide-compact" style={{ flex: 1, textAlign: "left" }}>{t("new_thought")}</span>
             <span className="pk-kbd pk-hide-compact">N</span>
           </button>
           <div style={{ flex: 1, minHeight: 20 }} />
           <div className="pk-private pk-hide-compact">
             <Icon d={I.lock} size="sm" className="accent-stroke" />
-            <span style={{ flex: 1 }}><strong>Private space</strong><span className="pk-muted">Only you can read this</span></span>
+            <span style={{ flex: 1 }}><strong>{t("private_space")}</strong><span className="pk-muted">{t("only_you")}</span></span>
           </div>
-          <button className="pk-nav-item" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title={theme === "dark" ? "Light mode" : "Dark mode"}>
+          <button className="pk-nav-item" onClick={() => setTheme(theme === "dark" ? "light" : "dark")} title={theme === "dark" ? t("light_mode") : t("dark_mode")}>
             <Icon d={theme === "dark" ? I.sun : I.moon} />
-            <span className="pk-hide-compact">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+            <span className="pk-hide-compact">{theme === "dark" ? t("light_mode") : t("dark_mode")}</span>
           </button>
           <div className="pk-me">
-            <button className="pk-avatar-btn" onClick={() => go("settings")} aria-label="Profile and settings">{initial}</button>
+            <button className="pk-avatar-btn" onClick={() => go("settings")} aria-label={t("profile_settings")}>{initial}</button>
             <span className="pk-hide-compact" style={{ flex: 1, minWidth: 0, lineHeight: 1.2 }}>
               <span className="pk-me-name">{name}</span>
-              <span className="pk-muted" style={{ fontSize: 12 }}>Owner</span>
+              <span className="pk-muted" style={{ fontSize: 12 }}>{t("owner")}</span>
             </span>
-            <button className="pk-square-btn sm pk-hide-compact" onClick={lock} title="Lock space" aria-label="Lock space">
+            <button className="pk-square-btn sm pk-hide-compact" onClick={lock} title={t("lock_space")} aria-label={t("lock_space")}>
               <Icon d={I.lock} size="sm" />
             </button>
           </div>
@@ -250,7 +253,7 @@ export function Shell({ session, theme, setTheme, onLocked }: {
             {!online && (
               <div role="status" className="pk-banner">
                 <Icon d={I.offline} size="sm" />
-                <span style={{ flex: 1 }}>Offline. Your draft stays on this device; publishing and AI resume when you are back online.</span>
+                <span style={{ flex: 1 }}>{t("offline_banner")}</span>
               </div>
             )}
             {view}
@@ -260,14 +263,14 @@ export function Shell({ session, theme, setTheme, onLocked }: {
         {!isMobile && <RightPanel />}
 
         {isMobile && (
-          <nav className="pk-mobile-nav" aria-label="Main">
+          <nav className="pk-mobile-nav" aria-label={t("main_nav")}>
             {MOBILE_NAV.map(([k, label, icon]) => (
-              <button key={k} aria-label={label} aria-current={k !== "new" && activeNav === k ? "page" : undefined}
+              <button key={k} aria-label={t(label)} aria-current={k !== "new" && activeNav === k ? "page" : undefined}
                 onClick={() => (k === "new" ? newThought() : go(k))}>
                 {k === "new" ? (
                   <span className="pk-mobile-new"><Icon d={I.plus} /></span>
                 ) : (
-                  <><Icon d={icon} /><span>{label}</span></>
+                  <><Icon d={icon} /><span>{t(label)}</span></>
                 )}
               </button>
             ))}
@@ -277,11 +280,11 @@ export function Shell({ session, theme, setTheme, onLocked }: {
         {sheet && isMobile && <Composer variant="sheet" onClose={() => { setSheet(false); api.clearComposerPreset(); }} />}
         {recOpen && <Recorder onClose={() => setRecOpen(false)} />}
         {connectFor && <ConnectDialog thought={connectFor} onClose={() => setConnectFor(null)} />}
-        {deleteFor && <ConfirmDelete snippet={snip(deleteFor.content || "Voice note", 120)} onConfirm={() => doDelete(deleteFor)} onCancel={() => setDeleteFor(null)} />}
+        {deleteFor && <ConfirmDelete snippet={snip(deleteFor.content || t("voice_note"), 120)} onConfirm={() => doDelete(deleteFor)} onCancel={() => setDeleteFor(null)} />}
         {toastState && (
           <div role="status" aria-live="polite" className="pk-toast">
             <span>{toastState.msg}</span>
-            {toastState.undo && <button onClick={toastState.undo}>Undo</button>}
+            {toastState.undo && <button onClick={toastState.undo}>{t("undo")}</button>}
           </div>
         )}
       </div>

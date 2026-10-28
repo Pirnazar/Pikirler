@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useApp } from "../app/context";
+import { useI18n } from "../i18n";
 import { I, Icon } from "../lib/icons";
 
 export function Header({ title, sub, back, right, tabs, active, onTab, mark }: {
@@ -14,11 +15,12 @@ export function Header({ title, sub, back, right, tabs, active, onTab, mark }: {
   mark?: boolean;
 }) {
   const app = useApp();
+  const { t } = useI18n();
   return (
     <header className="pk-header">
       <div className="pk-header-row">
         {back && (
-          <button className="pk-square-btn" onClick={app.back} aria-label="Back">
+          <button className="pk-square-btn" onClick={app.back} aria-label={t("back")}>
             <Icon d={I.back} size="sm" />
           </button>
         )}

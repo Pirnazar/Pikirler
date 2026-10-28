@@ -1,4 +1,5 @@
 import { ApiError, API_PREFIX, post, request, type Attachment } from "./client";
+import { translate } from "../i18n";
 import type { components } from "./schema";
 
 type UploadOut = components["schemas"]["UploadOut"];
@@ -32,7 +33,7 @@ function putBytes(url: string, file: Blob, onProgress: (p: number) => void): Pro
       }
       reject(new ApiError(xhr.status, code, message));
     };
-    xhr.onerror = () => reject(new ApiError(0, "network", "Upload interrupted. Check your connection."));
+    xhr.onerror = () => reject(new ApiError(0, "network", translate("e_upload_net")));
     xhr.send(file);
   });
 }

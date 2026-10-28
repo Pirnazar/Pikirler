@@ -1,14 +1,4 @@
-.env
-.env.*
-!.env.example
-__pycache__/
-*.pyc
-.venv/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-*.egg-info/
-data/
-backups/
-deploy/certs/
-.env.production
+# Per-project rules live in backend/.gitignore and frontend/.gitignore.
+*.zip
+.DS_Store
+Thumbs.db

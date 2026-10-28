@@ -8,8 +8,8 @@
    без Secure-cookie.
 2. Сертификаты в `deploy/certs/` (`fullchain.pem`, `privkey.pem`), домен в
    `deploy/nginx.conf`.
-3. Фронтенд: `npm ci && npm run build` в `../frontend`. nginx раздаёт
-   `../frontend/dist` с того же домена, что и API (путь — `FRONTEND_DIST`),
+3. Интерфейс собирается в образ сервиса `nginx` из `../frontend/Dockerfile`
+   (Node.js на сервере не нужен) и отдаётся с того же домена, что и API,
    поэтому `PIKIRLER_CORS_ORIGINS` можно оставить пустым.
 4. Сборка, миграции (отдельный управляемый шаг; дополнительно advisory lock,
    два параллельных запуска не пересекутся), запуск:

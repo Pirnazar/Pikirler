@@ -9,13 +9,13 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: "127.0.0.1",
-    port: 5470,
+    port: 5480,
     strictPort: true,
     proxy: { "/api": { target: API_TARGET, changeOrigin: false } },
   },
   preview: {
     host: "127.0.0.1",
-    port: 5471,
+    port: 5481,
     proxy: { "/api": { target: API_TARGET, changeOrigin: false } },
   },
   build: { target: "es2022", sourcemap: false },

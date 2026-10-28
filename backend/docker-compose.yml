@@ -3,6 +3,8 @@
 #   python scripts/init_env.py        # .env with random secrets
 #   docker compose up -d --build      # postgres, redis, rustfs, migrate, api, worker, web
 #   open http://localhost:5470          # the web interface (WEB_PORT)
+#   other devices on the Wi-Fi: WEB_HTTPS_BIND=0.0.0.0 + LAN_IP in .env, then
+#   https://<LAN_IP>:5443 (self-signed certificate)
 #   docker compose run --rm api pytest
 #
 # Uploaded files go to RustFS (S3-compatible); storage-init creates the private
@@ -135,13 +137,20 @@ services:
         condition: service_completed_successfully
 
   # The web interface: built frontend + nginx proxying /api to the api service.
+  # Plain HTTP stays on this computer; only HTTPS can be opened to the LAN.
   web:
     build:
       context: ../frontend
     image: pikirler-web:dev
     restart: unless-stopped
+    environment:
+      PIKIRLER_LAN_HTTPS: "1"
+      PIKIRLER_LAN_IP: ${LAN_IP:-}
     ports:
       - "127.0.0.1:${WEB_PORT:-5470}:80"
+      - "${WEB_HTTPS_BIND:-127.0.0.1}:${WEB_HTTPS_PORT:-5443}:443"
+    volumes:
+      - webcerts:/etc/nginx/lan-certs
     depends_on:
       api:
         condition: service_healthy
@@ -151,3 +160,4 @@ volumes:
   redisdata:
   mediadata:
   rustfsdata:
+  webcerts:

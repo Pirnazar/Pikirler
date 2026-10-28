@@ -255,6 +255,7 @@ git pull
 | Симптом | Что сделать |
 |---|---|
 | `Cannot connect to the Docker daemon` / `error during connect` | Запустите Docker Desktop и дождитесь, пока он загрузится. |
+| `password authentication failed for user "pikirler"` | База уже создана со старым паролем — так бывает, если `init_env.py` запускали повторно. Если данных в ней ещё нет: `docker compose -f backend/docker-compose.yml down -v`, затем снова `up -d --build`. **`down -v` удаляет все данные.** |
 | `pull access denied for minio/mc` | Старая версия проекта использовала MinIO, чьи образы больше не раздаются. Выполните `git pull`, удалите `backend/.env`, снова запустите `python backend/scripts/init_env.py` и `docker compose … up -d --build`. |
 | `port is already allocated` | Порт занят другой программой — поменяйте `*_PORT` в `backend/.env` и перезапустите. Если поменяли порт API, запускайте интерфейс с `PIKIRLER_API_URL=http://127.0.0.1:<порт>`. |
 | Интерфейс открывается, но вход не проходит | Проверьте, что API работает: http://127.0.0.1:8460/api/v1/pikirler/health/ready |

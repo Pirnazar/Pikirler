@@ -82,7 +82,9 @@ Docker Desktop должен быть запущен.
 docker compose -f backend/docker-compose.yml up -d --build
 ```
 
-Первая сборка занимает несколько минут. Поднимутся PostgreSQL, Redis, RustFS
+Первая сборка занимает от нескольких минут до получаса на медленном интернете:
+скачиваются образы, ffmpeg и Python-пакеты. Следующие запуски берут всё из
+кэша и проходят за секунды. Поднимутся PostgreSQL, Redis, RustFS
 (хранилище файлов), API и фоновый воркер; миграции базы применятся
 автоматически, приватный бакет для файлов создастся сам. Проверка:
 
@@ -255,6 +257,7 @@ git pull
 | Симптом | Что сделать |
 |---|---|
 | `Cannot connect to the Docker daemon` / `error during connect` | Запустите Docker Desktop и дождитесь, пока он загрузится. |
+| `context deadline exceeded`, `DeadlineExceeded`, `TLS handshake timeout` при скачивании или сборке | Docker не дождался ответа от Docker Hub — медленная или нестабильная сеть. Повторите ту же команду: уже скачанное берётся из кэша. Если повторяется, подключите зеркало реестра (Docker Desktop → Settings → Docker Engine → `"registry-mirrors"`) или VPN. |
 | `password authentication failed for user "pikirler"` | База уже создана со старым паролем — так бывает, если `init_env.py` запускали повторно. Если данных в ней ещё нет: `docker compose -f backend/docker-compose.yml down -v`, затем снова `up -d --build`. **`down -v` удаляет все данные.** |
 | `pull access denied for minio/mc` | Старая версия проекта использовала MinIO, чьи образы больше не раздаются. Выполните `git pull`, удалите `backend/.env`, снова запустите `python backend/scripts/init_env.py` и `docker compose … up -d --build`. |
 | `port is already allocated` | Порт занят другой программой — поменяйте `*_PORT` в `backend/.env` и перезапустите. Если поменяли порт API, запускайте интерфейс с `PIKIRLER_API_URL=http://127.0.0.1:<порт>`. |

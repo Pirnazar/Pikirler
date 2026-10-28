@@ -10,6 +10,7 @@ from app.modules.pikirler.schemas.common import Schema
 
 
 class SettingsOut(Schema):
+    display_name: str | None
     timezone: str
     ai_external_enabled: bool
     magic_word_enabled: bool
@@ -17,6 +18,7 @@ class SettingsOut(Schema):
 
 
 class SettingsUpdate(Schema):
+    display_name: str | None = Field(default=None, max_length=200)
     timezone: str | None = Field(default=None, max_length=64)
     ai_external_enabled: bool | None = Field(
         default=None,
@@ -35,6 +37,11 @@ class SettingsUpdate(Schema):
             except (ZoneInfoNotFoundError, ValueError) as exc:
                 raise ValueError("unknown timezone") from exc
         return value
+
+    @field_validator("display_name")
+    @classmethod
+    def _name(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
 
 
 class JobOut(Schema):

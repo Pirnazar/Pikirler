@@ -49,6 +49,7 @@ async def get_settings_route(principal: Account, db: DB) -> SettingsOut:
     owner = await db.get(Owner, principal.owner_id)
     assert owner is not None
     return SettingsOut(
+        display_name=owner.display_name,
         timezone=owner.timezone,
         ai_external_enabled=owner.ai_external_enabled,
         magic_word_enabled=owner.magic_word_hash is not None,
@@ -60,6 +61,8 @@ async def get_settings_route(principal: Account, db: DB) -> SettingsOut:
 async def update_settings(body: SettingsUpdate, principal: Account, db: DB) -> SettingsOut:
     owner = await db.get(Owner, principal.owner_id)
     assert owner is not None
+    if body.display_name is not None:
+        owner.display_name = body.display_name or None
     if body.timezone is not None:
         owner.timezone = body.timezone
     if body.ai_external_enabled is not None:

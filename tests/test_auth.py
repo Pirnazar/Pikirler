@@ -167,3 +167,11 @@ async def test_service_token_scopes(client: httpx.AsyncClient, owner, db) -> Non
         assert (await svc.post("/search/semantic", json={"query": "x"})).status_code in (403, 404)
         svc.headers["Authorization"] = "Bearer pks_invalid"
         assert (await svc.get("/thoughts")).status_code == 401
+
+
+async def test_display_name_is_editable_in_settings(client: httpx.AsyncClient) -> None:
+    resp = await client.patch("/settings", json={"display_name": "  Merdan  "})
+    assert resp.status_code == 200 and resp.json()["display_name"] == "Merdan"
+    assert (await client.get("/auth/me")).json()["owner"]["display_name"] == "Merdan"
+    resp = await client.patch("/settings", json={"display_name": ""})
+    assert resp.json()["display_name"] is None

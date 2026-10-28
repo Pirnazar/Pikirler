@@ -1,9 +1,10 @@
-"""S3-compatible storage (MinIO in development). boto3 runs in worker threads."""
+"""S3-compatible storage (RustFS in the compose stacks). boto3 runs in worker threads."""
 
 from __future__ import annotations
 
 import asyncio
 import os
+import tarfile
 import tempfile
 from collections.abc import AsyncIterator
 from typing import IO, Any
@@ -17,6 +18,7 @@ from app.core.config import Settings
 from app.storage.base import ObjectInfo, TooLarge, validate_key
 
 _SPOOL_IN_MEMORY = 8 * 1024 * 1024
+_PAX_TYPE = "PIKIRLER.content_type"
 
 
 class S3Storage:
@@ -151,6 +153,54 @@ class S3Storage:
 
     async def ping(self) -> None:
         await asyncio.to_thread(self._client.head_bucket, Bucket=self.bucket)
+
+    async def ensure_bucket(self) -> bool:
+        """Create the bucket if it is missing; True when it was created. A new
+        bucket has no policy, so it is private: nothing is readable anonymously."""
+        try:
+            await self.ping()
+            return False
+        except ClientError as exc:
+            code = exc.response.get("Error", {}).get("Code")
+            if code not in {"404", "NoSuchBucket", "NotFound"}:
+                raise
+        await asyncio.to_thread(self._client.create_bucket, Bucket=self.bucket)
+        return True
+
+    # Backups: the whole bucket as one tar stream, content types kept in PAX headers.
+    def export_tar(self, out: IO[bytes]) -> int:
+        count = 0
+        with tarfile.open(fileobj=out, mode="w|", format=tarfile.PAX_FORMAT) as tar:
+            pages = self._client.get_paginator("list_objects_v2").paginate(Bucket=self.bucket)
+            for page in pages:
+                for obj in page.get("Contents", []):
+                    resp = self._client.get_object(Bucket=self.bucket, Key=obj["Key"])
+                    info = tarfile.TarInfo(obj["Key"])
+                    info.size = int(obj["Size"])
+                    info.mtime = int(obj["LastModified"].timestamp())
+                    info.pax_headers = {_PAX_TYPE: resp.get("ContentType") or ""}
+                    tar.addfile(info, resp["Body"])
+                    count += 1
+        return count
+
+    def import_tar(self, src: IO[bytes]) -> int:
+        count = 0
+        with tarfile.open(fileobj=src, mode="r|") as tar:
+            for member in tar:
+                if not member.isfile():
+                    continue
+                key = validate_key(member.name.removeprefix("./"))
+                body = tar.extractfile(member)
+                assert body is not None
+                extra = {"ContentType": ct} if (ct := member.pax_headers.get(_PAX_TYPE)) else {}
+                # A streamed tar member is not seekable, which boto3 requires.
+                with tempfile.SpooledTemporaryFile(max_size=_SPOOL_IN_MEMORY) as spool:
+                    while chunk := body.read(1024 * 1024):
+                        spool.write(chunk)
+                    spool.seek(0)
+                    self._client.upload_fileobj(spool, self.bucket, key, ExtraArgs=extra)
+                count += 1
+        return count
 
 
 def tmp_path(suffix: str = "") -> str:

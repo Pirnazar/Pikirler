@@ -1,12 +1,12 @@
 # Local development stack. Production: docker-compose.prod.yml.
 #
 #   python scripts/init_env.py        # .env with random secrets
-#   docker compose up -d --build      # postgres, redis, migrate, api, worker
+#   docker compose up -d --build      # postgres, redis, rustfs, migrate, api, worker
 #   docker compose run --rm api pytest
 #
-# Uploaded files are stored in the "mediadata" volume. MinIO is optional:
-# COMPOSE_PROFILES=s3 in .env adds minio + minio-init (see .env.example).
-# Every port is bound to 127.0.0.1 only.
+# Uploaded files go to RustFS (S3-compatible); storage-init creates the private
+# bucket. PIKIRLER_STORAGE_BACKEND=local keeps them in the "mediadata" volume
+# instead. Every port is bound to 127.0.0.1 only.
 name: pikirler
 
 x-app: &app
@@ -21,6 +21,7 @@ x-app: &app
     PIKIRLER_TEST_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}_test
     PIKIRLER_REDIS_URL: redis://redis:6379/0
     PIKIRLER_TEST_REDIS_URL: redis://redis:6379/15
+    PIKIRLER_TEST_S3_ENDPOINT: http://rustfs:9000
   volumes:
     - mediadata:/srv/data/media
     - ./app:/srv/app/app
@@ -63,42 +64,32 @@ services:
       timeout: 3s
       retries: 20
 
-  minio:
-    image: ${MINIO_IMAGE:-minio/minio:latest}
-    profiles: ["s3"]
+  # S3-compatible object storage. The version is pinned so a new upstream
+  # image cannot change the stack under you; override with RUSTFS_IMAGE.
+  rustfs:
+    image: ${RUSTFS_IMAGE:-rustfs/rustfs:1.0.4}
     restart: unless-stopped
-    command: ["server", "/data", "--console-address", ":9001"]
     environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      RUSTFS_ACCESS_KEY: ${RUSTFS_ACCESS_KEY}
+      RUSTFS_SECRET_KEY: ${RUSTFS_SECRET_KEY}
     ports:
-      - "127.0.0.1:${MINIO_PORT:-9460}:9000"
-      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9461}:9001"
+      - "127.0.0.1:${RUSTFS_PORT:-9460}:9000"
     volumes:
-      - miniodata:/data
+      - rustfsdata:/data
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:9000/health"]
       interval: 5s
       timeout: 5s
       retries: 20
 
-  # Creates the private bucket once. No anonymous policy is ever set on it.
-  minio-init:
-    image: ${MINIO_MC_IMAGE:-minio/mc:latest}
-    profiles: ["s3"]
+  # Creates the private bucket once (no policy is ever attached to it).
+  storage-init:
+    <<: *app
+    command: ["pikirler", "init-storage"]
+    restart: "no"
     depends_on:
-      minio:
+      rustfs:
         condition: service_healthy
-    entrypoint: ["/bin/sh", "-c"]
-    command:
-      - >
-        mc alias set local http://minio:9000 "$${MINIO_ROOT_USER}" "$${MINIO_ROOT_PASSWORD}" &&
-        mc mb --ignore-existing local/$${PIKIRLER_S3_BUCKET} &&
-        mc anonymous set none local/$${PIKIRLER_S3_BUCKET}
-    environment:
-      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
-      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
-      PIKIRLER_S3_BUCKET: ${PIKIRLER_S3_BUCKET}
 
   # Migrations are a separate one-shot step. env.py additionally holds a
   # PostgreSQL advisory lock, so two concurrent runs cannot interleave.
@@ -121,9 +112,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-      minio-init:
+      storage-init:
         condition: service_completed_successfully
-        required: false
 
   worker:
     <<: *app
@@ -140,12 +130,11 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
-      minio-init:
+      storage-init:
         condition: service_completed_successfully
-        required: false
 
 volumes:
   pgdata:
   redisdata:
   mediadata:
-  miniodata:
+  rustfsdata:

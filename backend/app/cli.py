@@ -136,6 +136,43 @@ async def dispatch_jobs(args: argparse.Namespace) -> None:
         print(f"Dispatched {await jobs.dispatch_due(db)} jobs")
 
 
+async def init_storage(args: argparse.Namespace) -> None:
+    from app.storage import get_storage
+    from app.storage.s3 import S3Storage
+
+    storage = get_storage()
+    if not isinstance(storage, S3Storage):
+        print(f"Storage backend is {storage.name}; nothing to initialise.")
+        return
+    created = await storage.ensure_bucket()
+    print(f"Bucket {storage.bucket} {'created' if created else 'already exists'}.")
+
+
+def _s3_storage() -> Any:
+    from app.storage import get_storage
+    from app.storage.s3 import S3Storage
+
+    storage = get_storage()
+    if not isinstance(storage, S3Storage):
+        sys.exit("This command needs PIKIRLER_STORAGE_BACKEND=s3.")
+    return storage
+
+
+async def dump_objects(args: argparse.Namespace) -> None:
+    """Write every stored file to stdout as a tar stream (used by backup.sh)."""
+    storage = _s3_storage()
+    count = await asyncio.to_thread(storage.export_tar, sys.stdout.buffer)
+    print(f"Exported {count} objects", file=sys.stderr)
+
+
+async def load_objects(args: argparse.Namespace) -> None:
+    """Read a tar stream made by dump-objects from stdin (used by restore.sh)."""
+    storage = _s3_storage()
+    await storage.ensure_bucket()
+    count = await asyncio.to_thread(storage.import_tar, sys.stdin.buffer)
+    print(f"Imported {count} objects", file=sys.stderr)
+
+
 async def export_openapi(args: argparse.Namespace) -> None:
     from app.main import app
 
@@ -183,6 +220,10 @@ def main() -> None:
     p.set_defaults(func=reindex_embeddings)
 
     sub.add_parser("dispatch-jobs").set_defaults(func=dispatch_jobs)
+
+    sub.add_parser("init-storage").set_defaults(func=init_storage)
+    sub.add_parser("dump-objects").set_defaults(func=dump_objects)
+    sub.add_parser("load-objects").set_defaults(func=load_objects)
 
     p = sub.add_parser("export-openapi")
     p.add_argument("path")

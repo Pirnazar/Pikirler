@@ -30,11 +30,11 @@ def main() -> None:
     if target.exists():
         sys.exit(f"{target.name} already exists - not touching it.")
 
-    minio_password = secrets.token_urlsafe(24)
+    storage_secret = secrets.token_urlsafe(24)
     values = {
         "POSTGRES_PASSWORD": secrets.token_urlsafe(24),
-        "MINIO_ROOT_PASSWORD": minio_password,
-        "PIKIRLER_S3_SECRET_KEY": minio_password,  # the API uses the MinIO root account
+        "RUSTFS_SECRET_KEY": storage_secret,
+        "PIKIRLER_S3_SECRET_KEY": storage_secret,  # the API uses the RustFS root account
         "PIKIRLER_SECRET_KEY": secrets.token_urlsafe(48),
     }
     if args.production:

@@ -27,8 +27,8 @@ docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 ```
 
 Наружу открыт только nginx (TLS, HSTS, лимиты на `/auth/`, логи без query
-string). API, Postgres, Redis и (если включён) MinIO — во внутренней сети.
-Файлы по умолчанию лежат в томе `mediadata`; с `COMPOSE_PROFILES=s3` — в MinIO. Бакет MinIO
+string). API, Postgres, Redis и RustFS — во внутренней сети.
+Файлы лежат в RustFS (или в томе `mediadata` при `PIKIRLER_STORAGE_BACKEND=local`). Бакет
 приватный (`mc anonymous set none`), отдача файлов — через API.
 
 Проверка: `GET /api/v1/pikirler/health/ready` (БД, Redis, хранилище).
@@ -39,7 +39,7 @@ string). API, Postgres, Redis и (если включён) MinIO — во вну
 COMPOSE_FILE=docker-compose.prod.yml ENV_FILE=.env.production ./scripts/backup.sh /backups
 ```
 
-Создаёт `pg_dump` (custom format), копию загруженных файлов (из тома `mediadata` или бакета MinIO) и `SHA256SUMS`.
+Создаёт `pg_dump` (custom format), `objects.tar` со всеми загруженными файлами (из бакета RustFS через `pikirler dump-objects` или из тома `mediadata`) и `SHA256SUMS`.
 Запускать ежедневно (cron), копию — за пределы машины в зашифрованном виде
 (restic/borg). Хранить: 7 ежедневных, 4 еженедельных, 12 ежемесячных.
 

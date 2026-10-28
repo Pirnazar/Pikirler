@@ -25,7 +25,7 @@ pgvector в Docker, синхронный SQLAlchemy + psycopg, FastAPI-пане�
 ```
 HTTP ─► api/v1 (валидация, auth-зависимости) ─► services ─► repositories ─► PostgreSQL
                                                    │
-                                                   ├─► storage (S3/MinIO)
+                                                   ├─► storage (S3/RustFS)
                                                    ├─► integrations (embeddings / LLM / ASR)
                                                    └─► jobs (outbox) ─► Redis/ARQ ─► worker
 ```

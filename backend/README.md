@@ -21,7 +21,7 @@
 ## Стек
 
 Python 3.12 · FastAPI · SQLAlchemy 2 (async, asyncpg) · Alembic · PostgreSQL 16 +
-pgvector + pg_trgm · Redis + ARQ · локальный диск или S3/MinIO · Argon2id · Pydantic v2 ·
+pgvector + pg_trgm · Redis + ARQ · RustFS (S3) или локальный диск · Argon2id · Pydantic v2 ·
 pytest · ruff · mypy (strict).
 
 ## Быстрый старт (разработка)
@@ -32,18 +32,19 @@ pytest · ruff · mypy (strict).
 cp .env.example .env
 ```
 
-Отредактируйте `.env` (или создайте его командой `python scripts/init_env.py`): замените все `change_me` (пароли Postgres/MinIO,
+Отредактируйте `.env` (или создайте его командой `python scripts/init_env.py`): замените все `change_me` (пароли Postgres/RustFS,
 `PIKIRLER_SECRET_KEY` — 64+ случайных символов).
 
 ```bash
 docker compose up -d --build
 ```
 
-Поднимаются `postgres` (5460), `redis` (6460), одноразовый
+Поднимаются `postgres` (5460), `redis` (6460), `rustfs` (9460), одноразовые `storage-init` и
 `migrate`, `api` (8460, авто-перезагрузка) и `worker`. Документация API:
 <http://127.0.0.1:8460/api/v1/pikirler/docs>.
-Файлы хранятся в томе `mediadata`; MinIO (`minio` на 9460/9461) включается
-строкой `COMPOSE_PROFILES=s3` в `.env` (подробности — в `.env.example`).
+Файлы хранятся в RustFS (S3-совместимое хранилище, бакет создаёт
+`pikirler init-storage`); `PIKIRLER_STORAGE_BACKEND=local` кладёт их в том
+`mediadata`.
 
 Публичной регистрации нет. Владелец создаётся на сервере:
 
@@ -64,7 +65,7 @@ docker compose run --rm api pytest
 ```
 
 95 тестов против настоящих PostgreSQL (с миграциями, триггерами, pgvector,
-pg_trgm), Redis, MinIO и файлов на диске. Подменяются только внешние AI/ASR-
+pg_trgm), Redis, RustFS и файлов на диске. Подменяются только внешние AI/ASR-
 провайдеры (`tests/fakes.py`). Тестовая БД `<POSTGRES_DB>_test` создаётся
 автоматически.
 
@@ -102,7 +103,7 @@ docker compose run --rm api pikirler create-vector-index
 app/
   main.py, worker.py, cli.py
   core/            config, database, security, redis, rate limit, text (многоязычная нормализация), ошибки, логи
-  storage/         S3/MinIO и локальное хранилище (приватные ключи на UUID)
+  storage/         S3 (RustFS) и локальное хранилище (приватные ключи на UUID)
   api/v1/          auth, thoughts, threads, topics, projects, relations, timeline, media,
                    voice, search, memories, ai, data (экспорт/импорт/удаление), integrations, system
   modules/pikirler/

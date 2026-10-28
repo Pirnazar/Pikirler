@@ -1,8 +1,9 @@
-"""The S3 backend against the real MinIO of the compose stack.
+"""The S3 backend against the real RustFS of the compose stack.
 Skipped when PIKIRLER_TEST_S3_ENDPOINT is not set."""
 
 from __future__ import annotations
 
+import asyncio
 import io
 import os
 import uuid
@@ -14,11 +15,10 @@ from app.core.config import get_settings
 from app.storage.base import InvalidStorageKey, TooLarge
 
 ENDPOINT = os.environ.get("PIKIRLER_TEST_S3_ENDPOINT")
-pytestmark = pytest.mark.skipif(not ENDPOINT, reason="no MinIO configured")
+pytestmark = pytest.mark.skipif(not ENDPOINT, reason="no S3 endpoint configured")
 
 
-@pytest.fixture
-def s3():  # type: ignore[no-untyped-def]
+def _storage(bucket: str):  # type: ignore[no-untyped-def]
     from app.storage.s3 import S3Storage
 
     settings = get_settings().model_copy(
@@ -27,10 +27,50 @@ def s3():  # type: ignore[no-untyped-def]
             "s3_public_endpoint_url": ENDPOINT,
             "s3_access_key": os.environ["PIKIRLER_S3_ACCESS_KEY"],
             "s3_secret_key": os.environ["PIKIRLER_S3_SECRET_KEY"],
-            "s3_bucket": os.environ.get("PIKIRLER_S3_BUCKET", "pikirler-private"),
+            "s3_bucket": bucket,
         }
     )
     return S3Storage(settings)
+
+
+@pytest.fixture
+async def s3():  # type: ignore[no-untyped-def]
+    storage = _storage(os.environ.get("PIKIRLER_S3_BUCKET", "pikirler-private"))
+    await storage.ensure_bucket()
+    return storage
+
+
+async def test_ensure_bucket_creates_once() -> None:
+    storage = _storage(f"pikirler-test-{uuid.uuid4().hex[:12]}")
+    assert await storage.ensure_bucket() is True
+    assert await storage.ensure_bucket() is False
+    await storage.ping()
+    await asyncio.to_thread(storage._client.delete_bucket, Bucket=storage.bucket)
+
+
+async def test_bucket_tar_roundtrip_keeps_bytes_and_types() -> None:
+    src = _storage(f"pikirler-test-{uuid.uuid4().hex[:12]}")
+    dst = _storage(f"pikirler-test-{uuid.uuid4().hex[:12]}")
+    await src.ensure_bucket()
+    await dst.ensure_bucket()
+    files = {
+        _key(): (b"\x89PNG fake image", "image/png"),
+        _key("thumbnail"): (b"x" * 3000, "image/webp"),
+    }
+    for key, (data, ctype) in files.items():
+        await src.put_file(key, io.BytesIO(data), ctype)
+    buf = io.BytesIO()
+    assert await asyncio.to_thread(src.export_tar, buf) == 2
+    buf.seek(0)
+    assert await asyncio.to_thread(dst.import_tar, buf) == 2
+    for key, (data, ctype) in files.items():
+        info = await dst.head(key)
+        assert info is not None and info.content_type == ctype
+        assert b"".join([c async for c in dst.open_stream(key)]) == data
+    for storage in (src, dst):
+        for key in files:
+            await storage.delete(key)
+        await asyncio.to_thread(storage._client.delete_bucket, Bucket=storage.bucket)
 
 
 def _key(variant: str = "original") -> str:

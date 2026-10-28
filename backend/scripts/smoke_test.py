@@ -43,9 +43,15 @@ def main(base: str, email: str) -> None:
         buf = io.BytesIO()
         img.save(buf, format="JPEG", exif=exif.tobytes())
         data = buf.getvalue()
-        up = c.post("/media/uploads", json={
-            "filename": "smoke.jpg", "mime_type": "image/jpeg", "size": len(data),
-            "checksum_sha256": hashlib.sha256(data).hexdigest()}).json()
+        up = c.post(
+            "/media/uploads",
+            json={
+                "filename": "smoke.jpg",
+                "mime_type": "image/jpeg",
+                "size": len(data),
+                "checksum_sha256": hashlib.sha256(data).hexdigest(),
+            },
+        ).json()
         c.put(f"/media/uploads/{up['id']}/content", content=data).raise_for_status()
         c.post(f"/media/uploads/{up['id']}/complete").raise_for_status()
         for _ in range(30):  # the worker builds the preview and thumbnail

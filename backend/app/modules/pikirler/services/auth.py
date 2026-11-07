@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core import ratelimit
 from app.core.config import get_settings
 from app.core.database import utcnow
-from app.core.exceptions import Forbidden, Locked, NotFound, RateLimited, Unauthorized
+from app.core.exceptions import Conflict, Forbidden, Locked, NotFound, RateLimited, Unauthorized
 from app.core.security import (
     SERVICE_TOKEN_PREFIX,
     constant_time_equals,
@@ -77,6 +77,8 @@ async def login(
     db: AsyncSession, email: str, password: str, ip: str | None, user_agent: str | None
 ) -> tuple[Owner, IssuedSession]:
     settings = get_settings()
+    if settings.auth_mode != "password":
+        raise Forbidden("Sign in with the Magic Word", code="password_login_disabled")
     window = settings.login_rate_window_seconds
     await ratelimit.hit(f"login:ip:{ip or 'unknown'}", settings.login_rate_limit_per_ip, window)
     await ratelimit.hit(
@@ -110,8 +112,62 @@ async def login(
     return owner, issued
 
 
+async def login_with_magic_word(
+    db: AsyncSession, magic_word: str, ip: str | None, user_agent: str | None
+) -> tuple[Owner, IssuedSession]:
+    """Sign-in for auth_mode=magic_word: the word alone opens the space. The same
+    per-IP limit and owner lockout as password sign-in apply."""
+    settings = get_settings()
+    if settings.auth_mode != "magic_word":
+        raise NotFound("Magic Word sign-in is not enabled", code="not_found")
+    window = settings.login_rate_window_seconds
+    await ratelimit.hit(f"login:ip:{ip or 'unknown'}", settings.login_rate_limit_per_ip, window)
+    await ratelimit.hit("login:magic", settings.login_rate_limit_per_account, window)
+
+    owners = (
+        (
+            await db.execute(
+                select(Owner).where(Owner.magic_word_hash.is_not(None)).with_for_update()
+            )
+        )
+        .scalars()
+        .all()
+    )
+    now = utcnow()
+    word = normalize_magic_word(magic_word)
+    if not owners:
+        verify_secret(None, word)  # same timing as a normal attempt
+        raise Unauthorized("Wrong Magic Word", code="invalid_magic_word")
+    if any(o.locked_until and o.locked_until > now for o in owners):
+        verify_secret(None, word)
+        raise RateLimited("Too many failed attempts, try again later", code="account_locked")
+
+    owner = next((o for o in owners if verify_secret(o.magic_word_hash, word)), None)
+    if owner is None:
+        for o in owners:
+            o.failed_login_count += 1
+            if o.failed_login_count >= settings.lockout_threshold:
+                o.locked_until = now + timedelta(minutes=settings.lockout_minutes)
+                o.failed_login_count = 0
+        await db.commit()
+        raise Unauthorized("Wrong Magic Word", code="invalid_magic_word")
+
+    owner.failed_login_count = 0
+    owner.locked_until = None
+    if needs_rehash(owner.magic_word_hash):  # type: ignore[arg-type]
+        owner.magic_word_hash = hash_secret(word)
+    issued = await _issue_session(db, owner, ip, user_agent, unlocked=True)
+    await db.commit()
+    await ratelimit.reset("login:magic")
+    return owner, issued
+
+
 async def _issue_session(
-    db: AsyncSession, owner: Owner, ip: str | None, user_agent: str | None
+    db: AsyncSession,
+    owner: Owner,
+    ip: str | None,
+    user_agent: str | None,
+    unlocked: bool = False,
 ) -> IssuedSession:
     settings = get_settings()
     token, csrf = new_token(), new_token()
@@ -125,9 +181,10 @@ async def _issue_session(
         expires_at=now + timedelta(hours=settings.session_ttl_hours),
         ip_address=ip,
         user_agent=(user_agent or "")[:512] or None,
-        # Without a Magic Word the space is unlocked for the whole session.
+        # Without a Magic Word (or when the word itself signed in) the space is
+        # unlocked for the whole session.
         unlocked_until=None
-        if owner.magic_word_hash
+        if owner.magic_word_hash and not unlocked
         else now + timedelta(hours=settings.session_ttl_hours),
     )
     db.add(session)
@@ -270,6 +327,11 @@ async def verify_password(db: AsyncSession, owner_id: uuid.UUID, password: str) 
 async def set_magic_word(
     db: AsyncSession, principal: Principal, password: str, magic_word: str | None
 ) -> None:
+    if magic_word is None and get_settings().auth_mode == "magic_word":
+        raise Conflict(
+            "The Magic Word is how you sign in; change it instead of removing it",
+            code="magic_word_required_for_login",
+        )
     owner = await verify_password(db, principal.owner_id, password)
     owner.magic_word_hash = hash_secret(normalize_magic_word(magic_word)) if magic_word else None
     now = utcnow()

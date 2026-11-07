@@ -19,6 +19,7 @@ export const tk: Dict = {
   login_note: "Diňe eýesi girip bilýär. Açyk hasaba alyş ýok.",
   magic_note: "Siz eýýäm girdiňiz; jadyly söz paroluň üstündäki goşmaça gulp, onuň ornuny tutmaýar.",
   sign_out_instead: "Hasapdan çyk",
+  magic_login_note: "Pikirler siziň jadyly sözüňiz bilen açylýar. Açyk hasaba alyş ýok.",
   language: "Dil",
 
   nav_home: "Baş sahypa",
@@ -404,6 +405,8 @@ export const tk: Dict = {
   e_bad_ai: "AI garaşylmadyk görnüşde jogap berdi. Täzeden synanyşyň.",
   e_rate: "Synanyşyk gaty köp. Soňrak synanyşyň.",
   e_rate_min: "Synanyşyk gaty köp. {n} minutdan soň synanyşyň.",
+  e_password_disabled: "Bu Pikirler parol bilen däl-de, jadyly söz bilen açylýar.",
+  e_magic_needed: "Siz jadyly söz bilen girýärsiňiz, şonuň üçin ony üýtgedip bolýar, aýryp bolmaýar.",
   e_conflict: "Bu pikir başga ýerde üýtgedildi. Täzeläp, gaýtadan synanyşyň.",
   e_network: "Pikirler bilen baglanyşyk ýok. Internediňizi barlaň.",
   e_upload_net: "Ýüklemek kesildi. Internediňizi barlaň.",

@@ -71,6 +71,19 @@ async def set_password(args: argparse.Namespace) -> None:
     print("Password changed; all sessions revoked.")
 
 
+async def set_magic_word(args: argparse.Namespace) -> None:
+    from app.core.security import hash_secret, normalize_magic_word
+
+    word = _read_secret("New Magic Word: ", 8)
+    async with get_database().sessionmaker() as db:
+        owner = await _owner(db, args.email)
+        owner.magic_word_hash = hash_secret(normalize_magic_word(word))
+        owner.failed_login_count = 0
+        owner.locked_until = None
+        await db.commit()
+    print("Magic Word set. It is case-insensitive; spaces at the ends are ignored.")
+
+
 async def create_service_client(args: argparse.Namespace) -> None:
     scopes = [s.strip() for s in args.scopes.split(",") if s.strip()]
     async with get_database().sessionmaker() as db:
@@ -197,6 +210,10 @@ def main() -> None:
     p = sub.add_parser("set-password")
     p.add_argument("--email", required=True)
     p.set_defaults(func=set_password)
+
+    p = sub.add_parser("set-magic-word")
+    p.add_argument("--email", required=True)
+    p.set_defaults(func=set_magic_word)
 
     p = sub.add_parser("create-service-client")
     p.add_argument("--email", required=True)

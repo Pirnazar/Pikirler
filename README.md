@@ -185,6 +185,31 @@ docker compose -f backend/docker-compose.yml start
 виден, и пробрасывать порт на роутере не нужно. Для доступа вне дома безопаснее
 VPN, например Tailscale.
 
+### Вход только по магическому слову
+
+По умолчанию Pikirler просит email и пароль. Если вы один и сеть домашняя,
+можно входить одним магическим словом:
+
+1. Задайте слово (не короче 8 символов; регистр и пробелы по краям не важны):
+
+   ```bash
+   docker compose -f backend/docker-compose.yml run --rm api pikirler set-magic-word --email you@example.com
+   ```
+
+2. В `backend/.env` укажите `PIKIRLER_AUTH_MODE=magic_word` и перезапустите API:
+
+   ```bash
+   docker compose -f backend/docker-compose.yml up -d api
+   ```
+
+Экран входа будет спрашивать только магическое слово, вход по email и паролю
+отключится. Пароль владельца остаётся: он нужен, чтобы сменить слово в
+настройках. Убрать слово в этом режиме нельзя — иначе войти было бы нечем.
+Ограничения на число попыток и временная блокировка работают так же, как для
+пароля. Слово теперь единственный ключ к вашим мыслям: выбирайте его
+длинным. На сервере команды те же, только с `docker-compose.prod.yml`,
+`--env-file backend/.env.production` и `backend/.env.production`.
+
 ### Хранилище файлов
 
 Фото, видео и голосовые заметки хранит [RustFS](https://github.com/rustfs/rustfs) —

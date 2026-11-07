@@ -39,6 +39,10 @@ class Settings(BaseSettings):
     cookie_secure: bool = True
     cookie_samesite: Literal["lax", "strict"] = "lax"
     cookie_domain: str | None = None
+    # password: email + password, then the optional Magic Word as a second lock.
+    # magic_word: the owner signs in with the Magic Word alone (single-owner
+    # setups on a trusted network); email + password sign-in is switched off.
+    auth_mode: Literal["password", "magic_word"] = "password"
     session_ttl_hours: int = 24 * 14
     session_idle_timeout_hours: int = 24 * 3
     magic_word_unlock_minutes: int = 12 * 60

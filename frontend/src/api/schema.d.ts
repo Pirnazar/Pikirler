@@ -38,6 +38,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pikirler/auth/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Config
+         * @description How the sign-in screen should look; readable before signing in.
+         */
+        get: operations["config_api_v1_pikirler_auth_config_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pikirler/auth/login": {
         parameters: {
             query?: never;
@@ -49,6 +69,26 @@ export interface paths {
         put?: never;
         /** Login */
         post: operations["login_api_v1_pikirler_auth_login_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/auth/magic-login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Magic Login
+         * @description Sign in with the Magic Word alone (only when PIKIRLER_AUTH_MODE=magic_word).
+         */
+        post: operations["magic_login_api_v1_pikirler_auth_magic_login_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1428,6 +1468,14 @@ export interface components {
             thumbnail_url?: string | null;
             transcription?: components["schemas"]["TranscriptionRef"] | null;
         };
+        /** AuthConfig */
+        AuthConfig: {
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "password" | "magic_word";
+        };
         /** Body_create_voice_note_api_v1_pikirler_voice_notes_post */
         Body_create_voice_note_api_v1_pikirler_voice_notes_post: {
             /**
@@ -1665,6 +1713,11 @@ export interface components {
             email: string;
             /** Password */
             password: string;
+        };
+        /** MagicLoginRequest */
+        MagicLoginRequest: {
+            /** Magic Word */
+            magic_word: string;
         };
         /** MagicWordUpdate */
         MagicWordUpdate: {
@@ -2759,6 +2812,26 @@ export interface operations {
             };
         };
     };
+    config_api_v1_pikirler_auth_config_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthConfig"];
+                };
+            };
+        };
+    };
     login_api_v1_pikirler_auth_login_post: {
         parameters: {
             query?: never;
@@ -2769,6 +2842,39 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    magic_login_api_v1_pikirler_auth_magic_login_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MagicLoginRequest"];
             };
         };
         responses: {

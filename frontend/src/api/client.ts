@@ -148,6 +148,10 @@ export function errorMessage(e: unknown): string {
     case "rate_limited":
     case "account_locked":
       return e.retryAfter ? translate("e_rate_min", { n: Math.ceil(e.retryAfter / 60) }) : translate("e_rate");
+    case "password_login_disabled":
+      return translate("e_password_disabled");
+    case "magic_word_required_for_login":
+      return translate("e_magic_needed");
     case "version_conflict":
       return translate("e_conflict");
     default:

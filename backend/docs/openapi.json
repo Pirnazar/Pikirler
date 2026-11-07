@@ -50,6 +50,28 @@
         }
       }
     },
+    "/api/v1/pikirler/auth/config": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Config",
+        "description": "How the sign-in screen should look; readable before signing in.",
+        "operationId": "config_api_v1_pikirler_auth_config_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthConfig"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/pikirler/auth/login": {
       "post": {
         "tags": [
@@ -62,6 +84,48 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pikirler/auth/magic-login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Magic Login",
+        "description": "Sign in with the Magic Word alone (only when PIKIRLER_AUTH_MODE=magic_word).",
+        "operationId": "magic_login_api_v1_pikirler_auth_magic_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MagicLoginRequest"
               }
             }
           },
@@ -7507,6 +7571,23 @@
         ],
         "title": "AttachmentRef"
       },
+      "AuthConfig": {
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "password",
+              "magic_word"
+            ],
+            "title": "Mode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "mode"
+        ],
+        "title": "AuthConfig"
+      },
       "Body_create_voice_note_api_v1_pikirler_voice_notes_post": {
         "properties": {
           "file": {
@@ -8097,6 +8178,21 @@
           "password"
         ],
         "title": "LoginRequest"
+      },
+      "MagicLoginRequest": {
+        "properties": {
+          "magic_word": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Magic Word"
+          }
+        },
+        "type": "object",
+        "required": [
+          "magic_word"
+        ],
+        "title": "MagicLoginRequest"
       },
       "MagicWordUpdate": {
         "properties": {

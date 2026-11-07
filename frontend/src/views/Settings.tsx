@@ -150,7 +150,7 @@ function MagicWord({ enabled }: { enabled: boolean }) {
         {t("magic_desc")} {enabled ? t("magic_on") : t("magic_off")}
       </p>
       {!open ? (
-        <button className="btn btn-secondary" onClick={() => setOpen(true)}>{enabled ? t("change_or_remove") : t("set_magic")}</button>
+        <button className="btn btn-secondary" onClick={() => setOpen(true)}>{enabled ? (app.authMode === "magic_word" ? t("edit") : t("change_or_remove")) : t("set_magic")}</button>
       ) : (
         <form onSubmit={(e) => submit(e)} style={{ display: "grid", gap: 10 }}>
           <div className="pk-form-row">
@@ -162,7 +162,7 @@ function MagicWord({ enabled }: { enabled: boolean }) {
           {err && <div role="alert" className="pk-error">{err}</div>}
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <button className="btn btn-primary" type="submit" disabled={busy}>{t("save")}</button>
-            {enabled && <button className="btn btn-secondary" type="button" disabled={busy} onClick={(e) => submit(e, true)}>{t("remove")}</button>}
+            {enabled && app.authMode !== "magic_word" && <button className="btn btn-secondary" type="button" disabled={busy} onClick={(e) => submit(e, true)}>{t("remove")}</button>}
             <button className="btn btn-ghost" type="button" onClick={() => setOpen(false)}>{t("cancel")}</button>
           </div>
         </form>

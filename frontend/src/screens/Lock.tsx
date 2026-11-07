@@ -5,11 +5,14 @@ import { useI18n } from "../i18n";
 import { I, Icon } from "../lib/icons";
 
 export type LockMode = "login" | "magic";
+/** How the owner signs in, from GET /auth/config. */
+export type AuthMode = "password" | "magic_word";
 
 /** Sign-in and Magic Word unlock. The password signs the owner in; the Magic
  *  Word only unlocks an already authenticated session (HTTP 423 until then). */
-export function Lock({ mode, leaving, onReady, onModeChange }: {
+export function Lock({ mode, authMode, leaving, onReady, onModeChange }: {
   mode: LockMode;
+  authMode: AuthMode;
   leaving: boolean;
   onReady: (s: Session) => void;
   onModeChange: (m: LockMode) => void;
@@ -20,15 +23,22 @@ export function Lock({ mode, leaving, onReady, onModeChange }: {
   const [magic, setMagic] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  // auth_mode=magic_word: the word alone signs in, there is no email/password.
+  const wordOnly = mode === "login" && authMode === "magic_word";
+  const askWord = mode === "magic" || wordOnly;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setError("");
-    if (mode === "login" && (!email.trim() || !password)) return setError(t("err_need_login"));
-    if (mode === "magic" && !magic.trim()) return setError(t("err_need_magic"));
+    if (!askWord && (!email.trim() || !password)) return setError(t("err_need_login"));
+    if (askWord && !magic.trim()) return setError(t("err_need_magic"));
     setBusy(true);
     try {
-      if (mode === "login") {
+      if (wordOnly) {
+        const s = await request<Session>("POST", "/auth/magic-login", { json: { magic_word: magic }, quietAuth: true });
+        setMagic("");
+        onReady(s);
+      } else if (mode === "login") {
         const s = await request<Session>("POST", "/auth/login", { json: { email: email.trim(), password }, quietAuth: true });
         setPassword("");
         if (s.magic_word_enabled && !s.unlocked) onModeChange("magic");
@@ -83,7 +93,7 @@ export function Lock({ mode, leaving, onReady, onModeChange }: {
           <Icon d={I.lock} className="accent-stroke" />
           <h2 style={{ fontSize: 28, margin: 0 }}>{t("lock_title")}</h2>
         </div>
-        {mode === "login" ? (
+        {!askWord ? (
           <>
             <div className="field">
               <label htmlFor="pk-email">{t("email")}</label>
@@ -105,11 +115,11 @@ export function Lock({ mode, leaving, onReady, onModeChange }: {
         )}
         {error && <div role="alert" className="pk-error">{error}</div>}
         <button className="btn btn-primary" type="submit" disabled={busy}>
-          {mode === "login" ? (busy ? t("signing_in") : t("sign_in")) : busy ? t("unlocking") : t("unlock")}
+          {!askWord ? (busy ? t("signing_in") : t("sign_in")) : busy ? t("unlocking") : t("unlock")}
           <Icon d={I.arrow} size="sm" />
         </button>
         <p style={{ fontSize: 12, color: "var(--color-neutral-600)", margin: 0, textWrap: "pretty" } as React.CSSProperties}>
-          {mode === "login" ? t("login_note") : t("magic_note")}
+          {wordOnly ? t("magic_login_note") : mode === "login" ? t("login_note") : t("magic_note")}
         </p>
         {mode === "magic" && (
           <button type="button" className="btn btn-ghost" onClick={signOut} style={{ alignSelf: "flex-start" }}>

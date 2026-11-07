@@ -18,7 +18,7 @@ import { ProjectsView, ProjectView } from "./views/Projects";
 import { MemoriesView } from "./views/Memories";
 import { CalendarView } from "./views/Calendar";
 import { SettingsView } from "./views/Settings";
-import type { LockMode } from "./screens/Lock";
+import type { AuthMode, LockMode } from "./screens/Lock";
 import { useI18n } from "./i18n";
 
 const NAV = [
@@ -31,10 +31,11 @@ const MOBILE_NAV = [
   ["memories", "nav_memories", I.history], ["mine", "nav_profile", I.user],
 ] as const;
 
-export function Shell({ session, theme, setTheme, onLocked }: {
+export function Shell({ session, theme, setTheme, authMode, onLocked }: {
   session: Session;
   theme: "light" | "dark";
   setTheme: (t: "light" | "dark") => void;
+  authMode: AuthMode;
   onLocked: (mode: LockMode) => void;
 }) {
   const { t } = useI18n();
@@ -151,7 +152,7 @@ export function Shell({ session, theme, setTheme, onLocked }: {
   const aiAvailable = !!llm && llm.provider !== "disabled" && (!llm.external || !!settings?.ai_external_enabled);
 
   const api: AppApi = {
-    session, settings, setSettings, name, initial, theme, setTheme, route, go, back, isMobile,
+    session, settings, setSettings, name, initial, theme, setTheme, route, go, back, isMobile, authMode,
     projects, tags, reloadMeta, toast, newThought,
     reply: (t) => newThought({ replyTo: t, projectId: t.projects[0]?.id }),
     composer, clearComposerPreset: () => setComposer((c) => ({ focusToken: c.focusToken })),

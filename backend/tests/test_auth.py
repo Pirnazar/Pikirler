@@ -175,3 +175,55 @@ async def test_display_name_is_editable_in_settings(client: httpx.AsyncClient) -
     assert (await client.get("/auth/me")).json()["owner"]["display_name"] == "Merdan"
     resp = await client.patch("/settings", json={"display_name": ""})
     assert resp.json()["display_name"] is None
+
+
+async def test_auth_config_is_readable_before_sign_in(anon: httpx.AsyncClient) -> None:
+    resp = await anon.get("/auth/config")
+    assert resp.status_code == 200 and resp.json() == {"mode": "password"}
+
+
+async def test_magic_word_sign_in_mode(  # type: ignore[no-untyped-def]
+    anon: httpx.AsyncClient, client: httpx.AsyncClient, monkeypatch
+) -> None:
+    from app.core.config import get_settings
+
+    word = {"password": OWNER_PASSWORD, "magic_word": "Ýyldyrym ýoly"}
+    assert (await client.put("/auth/magic-word", json=word)).status_code == 200
+    # Off by default: in password mode the word alone opens nothing.
+    off = await anon.post("/auth/magic-login", json={"magic_word": "ýyldyrym ýoly"})
+    assert off.status_code == 404
+
+    monkeypatch.setattr(get_settings(), "auth_mode", "magic_word")
+    assert (await anon.get("/auth/config")).json() == {"mode": "magic_word"}
+    pw = await anon.post("/auth/login", json={"email": OWNER_EMAIL, "password": OWNER_PASSWORD})
+    assert pw.status_code == 403 and pw.json()["error"]["code"] == "password_login_disabled"
+    bad = await anon.post("/auth/magic-login", json={"magic_word": "wrong"})
+    assert bad.status_code == 401 and bad.json()["error"]["code"] == "invalid_magic_word"
+
+    async with _client() as fresh:
+        ok = await fresh.post("/auth/magic-login", json={"magic_word": "  ÝYLDYRYM ýoly "})
+        assert ok.status_code == 200 and ok.json()["unlocked"] is True
+        fresh.headers["X-CSRF-Token"] = ok.json()["csrf_token"]
+        assert (await fresh.get("/thoughts")).status_code == 200
+        # The word is the way in, so it can be changed but not removed.
+        removed = await fresh.put(
+            "/auth/magic-word", json={"password": OWNER_PASSWORD, "magic_word": None}
+        )
+        assert removed.status_code == 409
+        assert removed.json()["error"]["code"] == "magic_word_required_for_login"
+
+
+async def test_magic_word_sign_in_is_rate_limited(  # type: ignore[no-untyped-def]
+    anon: httpx.AsyncClient, client: httpx.AsyncClient, monkeypatch
+) -> None:
+    from app.core.config import get_settings
+
+    await client.put(
+        "/auth/magic-word", json={"password": OWNER_PASSWORD, "magic_word": "secret12"}
+    )
+    monkeypatch.setattr(get_settings(), "auth_mode", "magic_word")
+    codes = [
+        (await anon.post("/auth/magic-login", json={"magic_word": "x"})).status_code
+        for _ in range(6)
+    ]
+    assert codes[:5] == [401] * 5 and codes[-1] == 429

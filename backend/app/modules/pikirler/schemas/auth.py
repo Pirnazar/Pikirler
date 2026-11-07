@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime
+from typing import Literal
 
 from pydantic import Field, field_validator
 
@@ -31,6 +32,14 @@ class SessionState(Schema):
         description="Only returned at login. Also set as the readable CSRF cookie; "
         "send it back in the X-CSRF-Token header on every unsafe request.",
     )
+
+
+class AuthConfig(Schema):
+    mode: Literal["password", "magic_word"]
+
+
+class MagicLoginRequest(Schema):
+    magic_word: str = Field(min_length=1, max_length=256)
 
 
 class UnlockRequest(Schema):

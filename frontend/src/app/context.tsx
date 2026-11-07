@@ -55,6 +55,8 @@ export interface AppApi {
   toggleBookmark: (t: Thought) => Promise<void>;
   /** The configured LLM can be used: a provider exists and, if external, the owner consented. */
   aiAvailable: boolean;
+  /** password, or magic_word when the Magic Word alone signs in. */
+  authMode: "password" | "magic_word";
   lock: () => void;
   signOut: () => void;
 }

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, AUTH_EVENT, request, type AuthEventDetail, type Session } from "./api/client";
 import { I18nProvider, initialLang, useLangSetter, type Lang } from "./i18n";
-import { Lock, type LockMode } from "./screens/Lock";
+import { Lock, type AuthMode, type LockMode } from "./screens/Lock";
 import { Shell } from "./Shell";
 
 type Phase = { kind: "boot" } | { kind: "locked"; mode: LockMode } | { kind: "ready"; session: Session; leaving: boolean };
@@ -22,6 +22,7 @@ export function App() {
   const [phase, setPhase] = useState<Phase>({ kind: "boot" });
   const [theme, setThemeState] = useState(initialTheme);
   const [lang, setLangState] = useState<Lang>(initialLang);
+  const [authMode, setAuthMode] = useState<AuthMode>("password");
   const setLang = useLangSetter(setLangState);
 
   useEffect(() => {
@@ -37,6 +38,7 @@ export function App() {
   };
 
   useEffect(() => {
+    request<{ mode: AuthMode }>("GET", "/auth/config", { quietAuth: true }).then((c) => setAuthMode(c.mode), () => {});
     request<Session>("GET", "/auth/me", { quietAuth: true }).then(
       (s) => setPhase(s.magic_word_enabled && !s.unlocked ? { kind: "locked", mode: "magic" } : { kind: "ready", session: s, leaving: false }),
       (e) => setPhase({ kind: "locked", mode: e instanceof ApiError && e.status === 423 ? "magic" : "login" }),
@@ -66,11 +68,13 @@ export function App() {
               session={phase.session}
               theme={theme}
               setTheme={setTheme}
+              authMode={authMode}
               onLocked={(mode) => setPhase({ kind: "locked", mode })}
             />
           )}
           {(phase.kind === "locked" || phase.leaving) && (
             <Lock
+              authMode={authMode}
               mode={phase.kind === "locked" ? phase.mode : "magic"}
               leaving={phase.kind === "ready" && phase.leaving}
               onReady={ready}

@@ -11,7 +11,9 @@ from app.api.deps import DB, Account, AccountLocked, client_ip
 from app.core.config import get_settings
 from app.modules.pikirler.models import Owner
 from app.modules.pikirler.schemas.auth import (
+    AuthConfig,
     LoginRequest,
+    MagicLoginRequest,
     MagicWordUpdate,
     OwnerOut,
     PasswordChange,
@@ -52,11 +54,15 @@ def _clear_cookies(response: Response) -> None:
         )
 
 
-@router.post("/login", response_model=SessionState)
-async def login(body: LoginRequest, request: Request, response: Response, db: DB) -> SessionState:
-    owner, issued = await auth_service.login(
-        db, body.email, body.password, client_ip(request), request.headers.get("user-agent")
-    )
+@router.get("/config", response_model=AuthConfig)
+async def config() -> AuthConfig:
+    """How the sign-in screen should look; readable before signing in."""
+    return AuthConfig(mode=get_settings().auth_mode)
+
+
+def _session_state(
+    owner: Owner, issued: auth_service.IssuedSession, response: Response
+) -> SessionState:
     _set_cookies(response, issued.token, issued.csrf_token)
     principal = auth_service.session_principal(issued.session, owner)
     return SessionState(
@@ -66,6 +72,25 @@ async def login(body: LoginRequest, request: Request, response: Response, db: DB
         unlocked=principal.unlocked,
         csrf_token=issued.csrf_token,
     )
+
+
+@router.post("/login", response_model=SessionState)
+async def login(body: LoginRequest, request: Request, response: Response, db: DB) -> SessionState:
+    owner, issued = await auth_service.login(
+        db, body.email, body.password, client_ip(request), request.headers.get("user-agent")
+    )
+    return _session_state(owner, issued, response)
+
+
+@router.post("/magic-login", response_model=SessionState)
+async def magic_login(
+    body: MagicLoginRequest, request: Request, response: Response, db: DB
+) -> SessionState:
+    """Sign in with the Magic Word alone (only when PIKIRLER_AUTH_MODE=magic_word)."""
+    owner, issued = await auth_service.login_with_magic_word(
+        db, body.magic_word, client_ip(request), request.headers.get("user-agent")
+    )
+    return _session_state(owner, issued, response)
 
 
 @router.get("/me", response_model=SessionState)

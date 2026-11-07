@@ -21,6 +21,7 @@ export const en = {
   login_note: "Only the owner can sign in. There is no public sign-up.",
   magic_note: "Your session is signed in; the magic word is an extra lock on top of it, never the only one.",
   sign_out_instead: "Sign out instead",
+  magic_login_note: "Pikirler opens with your magic word. There is no public sign-up.",
   language: "Language",
 
   nav_home: "Home",
@@ -406,6 +407,8 @@ export const en = {
   e_bad_ai: "The AI answered in an unexpected way. Try again.",
   e_rate: "Too many attempts. Try again later.",
   e_rate_min: "Too many attempts. Try again in {n} min.",
+  e_password_disabled: "This Pikirler opens with the magic word, not a password.",
+  e_magic_needed: "You sign in with the magic word, so it can be changed but not removed.",
   e_conflict: "This thought was changed elsewhere. Reload and try again.",
   e_network: "Can't reach Pikirler. Check your connection.",
   e_upload_net: "Upload interrupted. Check your connection.",

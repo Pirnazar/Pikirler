@@ -1341,6 +1341,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pikirler/crosspost/teswirler": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Teswirler Account */
+        get: operations["teswirler_account_api_v1_pikirler_crosspost_teswirler_get"];
+        /**
+         * Connect Teswirler
+         * @description Sign in to Teswirler once. The password is not stored.
+         */
+        put: operations["connect_teswirler_api_v1_pikirler_crosspost_teswirler_put"];
+        post?: never;
+        /** Disconnect Teswirler */
+        delete: operations["disconnect_teswirler_api_v1_pikirler_crosspost_teswirler_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/thoughts/{thought_id}/crossposts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Crossposts */
+        get: operations["list_crossposts_api_v1_pikirler_thoughts__thought_id__crossposts_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/thoughts/{thought_id}/crossposts/{target}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Share Thought
+         * @description Share an existing thought, or try again after ``failed``/``unknown``.
+         */
+        post: operations["share_thought_api_v1_pikirler_thoughts__thought_id__crossposts__target__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1546,6 +1605,34 @@ export interface components {
             /** Explanation */
             explanation: string;
         };
+        /** CrosspostOut */
+        CrosspostOut: {
+            target: components["schemas"]["CrosspostTarget"];
+            status: components["schemas"]["CrosspostStatus"];
+            /** Url */
+            url?: string | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+            /** Sent At */
+            sent_at?: string | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * CrosspostStatus
+         * @enum {string}
+         */
+        CrosspostStatus: "pending" | "sending" | "sent" | "failed" | "unknown";
+        /**
+         * CrosspostTarget
+         * @enum {string}
+         */
+        CrosspostTarget: "teswirler";
         /** DayCount */
         DayCount: {
             /**
@@ -2081,6 +2168,11 @@ export interface components {
              * @description Client kind. Ignored for service tokens (fixed per client).
              */
             source?: ("web" | "mobile" | "api") | null;
+            /**
+             * Crosspost
+             * @description Also publish a copy on these sites (owner sessions only). Sending happens in the background; see ``crossposts`` on the result.
+             */
+            crosspost?: components["schemas"]["CrosspostTarget"][];
         };
         /** RevisionOut */
         RevisionOut: {
@@ -2379,6 +2471,32 @@ export interface components {
             /** Thread Id */
             thread_id?: string | null;
         };
+        /** TeswirlerAccountOut */
+        TeswirlerAccountOut: {
+            /** Connected */
+            connected: boolean;
+            /** Username */
+            username?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Profile Url */
+            profile_url?: string | null;
+            /** Connected At */
+            connected_at?: string | null;
+        };
+        /** TeswirlerConnect */
+        TeswirlerConnect: {
+            /**
+             * Identifier
+             * @description Username or e-mail
+             */
+            identifier: string;
+            /**
+             * Password
+             * @description Used once, never stored
+             */
+            password: string;
+        };
         /** ThoughtCreate */
         ThoughtCreate: {
             /**
@@ -2415,6 +2533,11 @@ export interface components {
              * @description Client kind. Ignored for service tokens (fixed per client).
              */
             source?: ("web" | "mobile" | "api") | null;
+            /**
+             * Crosspost
+             * @description Also publish a copy on these sites (owner sessions only). Sending happens in the background; see ``crossposts`` on the result.
+             */
+            crosspost?: components["schemas"]["CrosspostTarget"][];
         };
         /** ThoughtOut */
         ThoughtOut: {
@@ -2472,6 +2595,8 @@ export interface components {
              * @default 0
              */
             reply_count: number;
+            /** Crossposts */
+            crossposts?: components["schemas"]["CrosspostOut"][];
         };
         /** ThoughtRequest */
         ThoughtRequest: {
@@ -8348,6 +8473,340 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContinueResult"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF failure or missing scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found (or owned by someone else) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Magic Word required */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    teswirler_account_api_v1_pikirler_crosspost_teswirler_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeswirlerAccountOut"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF failure or missing scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found (or owned by someone else) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Magic Word required */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    connect_teswirler_api_v1_pikirler_crosspost_teswirler_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeswirlerConnect"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeswirlerAccountOut"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF failure or missing scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found (or owned by someone else) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Magic Word required */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    disconnect_teswirler_api_v1_pikirler_crosspost_teswirler_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeswirlerAccountOut"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF failure or missing scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found (or owned by someone else) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Magic Word required */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_crossposts_api_v1_pikirler_thoughts__thought_id__crossposts_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thought_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrosspostOut"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF failure or missing scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found (or owned by someone else) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Magic Word required */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    share_thought_api_v1_pikirler_thoughts__thought_id__crossposts__target__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                thought_id: string;
+                target: components["schemas"]["CrosspostTarget"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrosspostOut"][];
                 };
             };
             /** @description Not authenticated */

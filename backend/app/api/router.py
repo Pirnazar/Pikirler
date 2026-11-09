@@ -5,6 +5,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     ai,
     auth,
+    crosspost,
     data,
     integrations,
     media,
@@ -37,3 +38,4 @@ api_router.include_router(memories.router)
 api_router.include_router(ai.router)
 api_router.include_router(data.router)
 api_router.include_router(integrations.router)
+api_router.include_router(crosspost.router)

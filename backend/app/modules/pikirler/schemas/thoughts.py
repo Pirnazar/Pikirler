@@ -6,8 +6,14 @@ from typing import Literal
 
 from pydantic import Field, field_validator
 
-from app.modules.pikirler.models.enums import ContentFormat, ThoughtStatus, ThoughtType
+from app.modules.pikirler.models.enums import (
+    ContentFormat,
+    CrosspostTarget,
+    ThoughtStatus,
+    ThoughtType,
+)
 from app.modules.pikirler.schemas.common import Schema
+from app.modules.pikirler.schemas.crosspost import CrosspostOut
 
 MAX_CONTENT_CHARS = 200_000
 MAX_TAGS = 30
@@ -66,6 +72,12 @@ class ThoughtCreate(Schema):
     source: UserSource | None = Field(
         default=None, description="Client kind. Ignored for service tokens (fixed per client)."
     )
+    crosspost: list[CrosspostTarget] = Field(
+        default_factory=list,
+        max_length=len(CrosspostTarget),
+        description="Also publish a copy on these sites (owner sessions only). "
+        "Sending happens in the background; see ``crossposts`` on the result.",
+    )
 
     @field_validator("tags")
     @classmethod
@@ -117,6 +129,7 @@ class ThoughtOut(Schema):
     projects: list[ProjectRef]
     attachments: list[AttachmentRef]
     reply_count: int = 0
+    crossposts: list[CrosspostOut] = Field(default_factory=list)
 
 
 class RevisionOut(Schema):

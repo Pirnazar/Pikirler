@@ -109,6 +109,13 @@ class Settings(BaseSettings):
     asr_device: str = "auto"
     asr_compute_type: str = "auto"
 
+    # --- cross-posting ------------------------------------------------------
+    # Teswirler (teswirler.com) receives a copy of a thought only when the owner
+    # ticks it for that thought. Its session tokens are stored encrypted.
+    teswirler_api_url: str = "https://api.teswirler.com"
+    teswirler_site_url: str = "https://teswirler.com"
+    teswirler_timeout_seconds: float = 20.0
+
     # --- jobs ---------------------------------------------------------------
     job_max_attempts: int = 5
     job_dispatch_interval_seconds: int = 10

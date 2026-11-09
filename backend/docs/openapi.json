@@ -7250,6 +7250,409 @@
           }
         }
       }
+    },
+    "/api/v1/pikirler/crosspost/teswirler": {
+      "get": {
+        "tags": [
+          "crosspost"
+        ],
+        "summary": "Teswirler Account",
+        "operationId": "teswirler_account_api_v1_pikirler_crosspost_teswirler_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeswirlerAccountOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF failure or missing scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or owned by someone else)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Magic Word required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "crosspost"
+        ],
+        "summary": "Connect Teswirler",
+        "description": "Sign in to Teswirler once. The password is not stored.",
+        "operationId": "connect_teswirler_api_v1_pikirler_crosspost_teswirler_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeswirlerConnect"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeswirlerAccountOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF failure or missing scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or owned by someone else)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Magic Word required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "crosspost"
+        ],
+        "summary": "Disconnect Teswirler",
+        "operationId": "disconnect_teswirler_api_v1_pikirler_crosspost_teswirler_delete",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeswirlerAccountOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF failure or missing scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or owned by someone else)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Magic Word required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pikirler/thoughts/{thought_id}/crossposts": {
+      "get": {
+        "tags": [
+          "crosspost"
+        ],
+        "summary": "List Crossposts",
+        "operationId": "list_crossposts_api_v1_pikirler_thoughts__thought_id__crossposts_get",
+        "parameters": [
+          {
+            "name": "thought_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Thought Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CrosspostOut"
+                  },
+                  "title": "Response List Crossposts Api V1 Pikirler Thoughts  Thought Id  Crossposts Get"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF failure or missing scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or owned by someone else)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Magic Word required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pikirler/thoughts/{thought_id}/crossposts/{target}": {
+      "post": {
+        "tags": [
+          "crosspost"
+        ],
+        "summary": "Share Thought",
+        "description": "Share an existing thought, or try again after ``failed``/``unknown``.",
+        "operationId": "share_thought_api_v1_pikirler_thoughts__thought_id__crossposts__target__post",
+        "parameters": [
+          {
+            "name": "thought_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Thought Id"
+            }
+          },
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CrosspostTarget"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CrosspostOut"
+                  },
+                  "title": "Response Share Thought Api V1 Pikirler Thoughts  Thought Id  Crossposts  Target  Post"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF failure or missing scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or owned by someone else)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Magic Word required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7753,6 +8156,91 @@
           "explanation"
         ],
         "title": "Contradiction"
+      },
+      "CrosspostOut": {
+        "properties": {
+          "target": {
+            "$ref": "#/components/schemas/CrosspostTarget"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CrosspostStatus"
+          },
+          "url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Url"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "sent_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sent At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "target",
+          "status",
+          "updated_at"
+        ],
+        "title": "CrosspostOut"
+      },
+      "CrosspostStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "sending",
+          "sent",
+          "failed",
+          "unknown"
+        ],
+        "title": "CrosspostStatus"
+      },
+      "CrosspostTarget": {
+        "type": "string",
+        "enum": [
+          "teswirler"
+        ],
+        "title": "CrosspostTarget"
       },
       "DayCount": {
         "properties": {
@@ -9104,6 +9592,15 @@
             ],
             "title": "Source",
             "description": "Client kind. Ignored for service tokens (fixed per client)."
+          },
+          "crosspost": {
+            "items": {
+              "$ref": "#/components/schemas/CrosspostTarget"
+            },
+            "type": "array",
+            "maxItems": 1,
+            "title": "Crosspost",
+            "description": "Also publish a copy on these sites (owner sessions only). Sending happens in the background; see ``crossposts`` on the result."
           }
         },
         "type": "object",
@@ -9847,6 +10344,88 @@
         "type": "object",
         "title": "TargetRequest"
       },
+      "TeswirlerAccountOut": {
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "profile_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Url"
+          },
+          "connected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connected At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "connected"
+        ],
+        "title": "TeswirlerAccountOut"
+      },
+      "TeswirlerConnect": {
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 1,
+            "title": "Identifier",
+            "description": "Username or e-mail"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Password",
+            "description": "Used once, never stored"
+          }
+        },
+        "type": "object",
+        "required": [
+          "identifier",
+          "password"
+        ],
+        "title": "TeswirlerConnect"
+      },
       "ThoughtCreate": {
         "properties": {
           "content": {
@@ -9931,6 +10510,15 @@
             ],
             "title": "Source",
             "description": "Client kind. Ignored for service tokens (fixed per client)."
+          },
+          "crosspost": {
+            "items": {
+              "$ref": "#/components/schemas/CrosspostTarget"
+            },
+            "type": "array",
+            "maxItems": 1,
+            "title": "Crosspost",
+            "description": "Also publish a copy on these sites (owner sessions only). Sending happens in the background; see ``crossposts`` on the result."
           }
         },
         "type": "object",
@@ -10069,6 +10657,13 @@
             "type": "integer",
             "title": "Reply Count",
             "default": 0
+          },
+          "crossposts": {
+            "items": {
+              "$ref": "#/components/schemas/CrosspostOut"
+            },
+            "type": "array",
+            "title": "Crossposts"
           }
         },
         "type": "object",

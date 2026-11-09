@@ -30,7 +30,7 @@ from app.modules.pikirler.models import (
 from app.modules.pikirler.models.enums import ProcessingStatus, RevisionSource, ThoughtStatus
 from app.modules.pikirler.repositories import thoughts as repo
 from app.modules.pikirler.schemas.thoughts import ThoughtCreate, ThoughtUpdate
-from app.modules.pikirler.services import jobs, tags
+from app.modules.pikirler.services import crosspost, jobs, tags
 from app.modules.pikirler.services.auth import Principal
 
 EMBED_JOB = "embed_thought"
@@ -294,6 +294,7 @@ async def create(
     )
     await refresh_search_documents(db, owner_id, [thought.id])
     await _queue_embedding(db, thought)
+    await crosspost.queue(db, principal, thought, [t.value for t in data.crosspost])
     await db.commit()
     return await repo.get(db, owner_id, thought.id, load=True)
 

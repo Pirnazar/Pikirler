@@ -111,6 +111,18 @@ class JobStatus(StrEnum):
     dead = "dead"  # out of attempts; manual retry only
 
 
+class CrosspostTarget(StrEnum):
+    teswirler = "teswirler"
+
+
+class CrosspostStatus(StrEnum):
+    pending = "pending"
+    sending = "sending"
+    sent = "sent"
+    failed = "failed"
+    unknown = "unknown"  # the request may have reached the site; never resent automatically
+
+
 def check_in(column: str, enum: type[StrEnum]) -> str:
     values = ", ".join(f"'{v.value}'" for v in enum)
     return f"{column} IN ({values})"

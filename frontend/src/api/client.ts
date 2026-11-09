@@ -152,6 +152,18 @@ export function errorMessage(e: unknown): string {
       return translate("e_password_disabled");
     case "magic_word_required_for_login":
       return translate("e_magic_needed");
+    case "teswirler_login_failed":
+      return translate("e_teswirler_login");
+    case "teswirler_unavailable":
+      return translate("cp_unavailable");
+    case "teswirler_not_connected":
+      return translate("teswirler_connect_first");
+    case "crosspost_already_sent":
+      return translate("e_crosspost_sent");
+    case "crosspost_empty":
+      return translate("e_crosspost_empty");
+    case "crosspost_not_published":
+      return translate("e_crosspost_draft");
     case "version_conflict":
       return translate("e_conflict");
     default:

@@ -9,6 +9,7 @@ import { useLoad } from "../app/hooks";
 import { Empty, Skeletons } from "../components/Feed";
 import { Header } from "../components/Header";
 import { Insights } from "../components/Insights";
+import { Crossposts } from "../components/Crossposts";
 import { ThoughtMedia, useScrollIntoView } from "../components/Media";
 import { full, short, snip } from "../lib/format";
 import { I, Icon } from "../lib/icons";
@@ -176,6 +177,7 @@ export function DetailView({ id }: { id: string }) {
                   {t.projects.map((p) => <button key={p.id} className="pk-proj-chip" onClick={() => app.go("project", p.id)}>{p.name}</button>)}
                   {t.tags.map((g) => <button key={g} className="tag tag-neutral pk-tag-btn" onClick={() => app.go("topics", g)}>#{g}</button>)}
                 </div>
+                <Crossposts thought={t} />
                 <div className="pk-detail-bar">
                   <button className={t.is_bookmarked ? "on" : ""} onClick={() => app.toggleBookmark(t)}>
                     <Icon d={I.bookmark} size="sm" />{t.is_bookmarked ? tr("bookmarked") : tr("bookmark")}

@@ -1,3 +1,4 @@
+from app.modules.pikirler.models.crosspost import Crosspost, ExternalAccount
 from app.modules.pikirler.models.media import Attachment, ThoughtAttachment, VoiceTranscription
 from app.modules.pikirler.models.owner import AuthSession, Owner, ServiceClient
 from app.modules.pikirler.models.system import AIUsage, Job, ThoughtEmbedding
@@ -16,6 +17,8 @@ __all__ = [
     "AIUsage",
     "Attachment",
     "AuthSession",
+    "Crosspost",
+    "ExternalAccount",
     "Job",
     "Owner",
     "Project",

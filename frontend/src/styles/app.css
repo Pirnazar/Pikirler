@@ -186,6 +186,20 @@
 .pk-tag-btn { border: 0; cursor: pointer; }
 .pk-tag-btn:hover { background: var(--color-accent-100); color: var(--color-accent-800); }
 .pk-thread-label { font-size: 12px; color: var(--color-neutral-700); font-weight: 600; }
+
+/* Also-post-to: X and Teswirler, off by default */
+.pk-share { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 6px 0 4px; font-size: 13px; }
+.pk-share-label { color: var(--color-neutral-700); font-weight: 600; }
+.pk-check { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; cursor: pointer; min-height: 32px; }
+.pk-check input { width: 18px; height: 18px; margin: 0; accent-color: var(--color-accent); cursor: pointer; }
+.pk-check.off { color: var(--color-neutral-600); cursor: default; }
+.pk-check.off input { cursor: not-allowed; }
+.pk-share-note { flex-basis: 100%; font-size: 12px; color: var(--color-neutral-600); }
+.pk-link-btn { border: 0; background: none; padding: 0; color: var(--color-accent); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+.pk-crossposts { display: flex; flex-wrap: wrap; gap: 6px 12px; margin-top: 8px; font-size: 12px; font-weight: 600; color: var(--color-neutral-700); }
+.pk-crosspost { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.pk-crosspost a { color: var(--color-accent); }
+.pk-crosspost.failed, .pk-crosspost.unknown { color: var(--color-danger); }
 .pk-actions { display: flex; align-items: center; gap: 2px; margin: 6px 0 0 -8px; position: relative; }
 .pk-act {
   display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 8px; background: none; border: 0;

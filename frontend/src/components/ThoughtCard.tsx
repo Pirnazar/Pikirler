@@ -2,9 +2,13 @@ import { useState } from "react";
 import type { Thought } from "../api/client";
 import { typeLabel, useApp } from "../app/context";
 import { useI18n } from "../i18n";
+import { errorMessage, post } from "../api/client";
+import { emit } from "../app/bus";
+import { openX, useTeswirler, type Crosspost } from "../lib/crosspost";
 import { full, rel } from "../lib/format";
 import { I, Icon } from "../lib/icons";
 import { Insights } from "./Insights";
+import { Crossposts } from "./Crossposts";
 import { ThoughtMedia } from "./Media";
 
 export function ThoughtCard({ t, fresh }: { t: Thought; fresh?: boolean }) {
@@ -24,6 +28,18 @@ export function ThoughtCard({ t, fresh }: { t: Thought; fresh?: boolean }) {
     fn();
   };
   const open = () => app.go("detail", t.id);
+  const teswirler = useTeswirler();
+  const onTeswirler = (t.crossposts ?? []).some((c) => c.target === "teswirler");
+  async function shareTeswirler() {
+    setMenu(false);
+    try {
+      const next = await post<Crosspost[]>(`/thoughts/${t.id}/crossposts/teswirler`);
+      emit({ type: "updated", thought: { ...t, crossposts: next } });
+      app.toast(tr("cp_queued", { site: "Teswirler" }));
+    } catch (e) {
+      app.toast(errorMessage(e));
+    }
+  }
 
   return (
     <article className={"pk-card" + (fresh ? " new" : "")} onClick={open} onMouseLeave={() => setMenu(false)}>
@@ -54,6 +70,7 @@ export function ThoughtCard({ t, fresh }: { t: Thought; fresh?: boolean }) {
             )}
           </div>
         )}
+        <Crossposts thought={t} />
         <div className="pk-actions">
           <button className="pk-act" title={tr("continue_thought")} onClick={stop(() => app.reply(t))}>
             <Icon d={I.reply} size="sm" />{tr("continue")}
@@ -81,6 +98,12 @@ export function ThoughtCard({ t, fresh }: { t: Thought; fresh?: boolean }) {
                 navigator.clipboard?.writeText(t.content).then(() => app.toast(tr("copied")), () => app.toast(tr("copy_failed")));
                 setMenu(false);
               }}>{tr("copy_text")}</button>
+              {t.content.trim() && t.status === "published" && (
+                <button role="menuitem" onClick={() => { setMenu(false); if (!openX(t.content)) app.toast(tr("x_blocked")); }}>{tr("share_to", { site: "X" })}</button>
+              )}
+              {t.content.trim() && t.status === "published" && teswirler?.connected && !onTeswirler && (
+                <button role="menuitem" onClick={shareTeswirler}>{tr("share_to", { site: "Teswirler" })}</button>
+              )}
               <button role="menuitem" className="danger" onClick={() => { setMenu(false); app.askDelete(t); }}>{tr("delete_ellipsis")}</button>
             </div>
           )}

@@ -4,6 +4,7 @@ import { useApp } from "../app/context";
 import { Header } from "../components/Header";
 import { LangSwitch } from "../components/LangSwitch";
 import { useI18n, type I18n } from "../i18n";
+import { connectTeswirler, disconnectTeswirler, useTeswirler } from "../lib/crosspost";
 
 type Providers = Record<string, { provider?: string; model?: string | null; external?: boolean }>;
 
@@ -91,6 +92,8 @@ export function SettingsView() {
 
         <MagicWord enabled={!!s?.magic_word_enabled} />
 
+        <Sharing />
+
         <div>
           <div className="pk-section-label" style={{ marginBottom: 6 }}>{t("keyboard")}</div>
           {SHORTCUTS.map(([k, d]) => <div key={k} className="pk-shortcut"><span>{t(d)}</span><span>{k}</span></div>)}
@@ -167,6 +170,96 @@ function MagicWord({ enabled }: { enabled: boolean }) {
           </div>
         </form>
       )}
+    </div>
+  );
+}
+
+/** Where else a thought can be published. X needs no account here: it opens
+ *  with the text filled in. Teswirler is signed in once; the password is not kept. */
+function Sharing() {
+  const app = useApp();
+  const { t } = useI18n();
+  const account = useTeswirler();
+  const [open, setOpen] = useState(false);
+  const [identifier, setIdentifier] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  async function connect(e: FormEvent) {
+    e.preventDefault();
+    setErr("");
+    if (!identifier.trim() || !password) return setErr(t("teswirler_need_login"));
+    setBusy(true);
+    try {
+      await connectTeswirler(identifier.trim(), password);
+      app.toast(t("teswirler_connected_toast"));
+      setOpen(false);
+      setIdentifier("");
+    } catch (e2) {
+      setErr(errorMessage(e2));
+    } finally {
+      setPassword("");
+      setBusy(false);
+    }
+  }
+
+  async function disconnect() {
+    setBusy(true);
+    try {
+      await disconnectTeswirler();
+      app.toast(t("teswirler_disconnected_toast"));
+    } catch (e2) {
+      app.toast(errorMessage(e2));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div>
+      <div className="pk-section-label" style={{ marginBottom: 6 }}>{t("sharing")}</div>
+      <p style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>{t("sharing_desc")}</p>
+      <div style={{ padding: "12px 0", borderBottom: "1px solid var(--color-divider)" }}>
+        <span style={{ display: "block", fontWeight: 800 }}>X</span>
+        <span style={{ display: "block", fontSize: 13, color: "var(--color-neutral-700)", marginTop: 2 }}>{t("x_desc")}</span>
+      </div>
+      <div style={{ padding: "12px 0", display: "grid", gap: 10 }}>
+        <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ flex: 1, minWidth: 200 }}>
+            <span style={{ display: "block", fontWeight: 800 }}>Teswirler</span>
+            <span style={{ display: "block", fontSize: 13, color: "var(--color-neutral-700)", marginTop: 2 }}>
+              {account?.connected ? (
+                <>
+                  {t("teswirler_connected_as")}{" "}
+                  {account.profile_url ? <a href={account.profile_url} target="_blank" rel="noopener noreferrer">@{account.username}</a> : account.display_name}
+                </>
+              ) : t("teswirler_desc")}
+            </span>
+          </span>
+          {account?.connected ? (
+            <button className="btn btn-secondary" disabled={busy} onClick={disconnect}>{t("teswirler_disconnect")}</button>
+          ) : !open ? (
+            <button className="btn btn-secondary" onClick={() => setOpen(true)}>{t("teswirler_connect")}</button>
+          ) : null}
+        </div>
+        {!account?.connected && open && (
+          <form onSubmit={connect} style={{ display: "grid", gap: 10 }}>
+            <div className="pk-form-row">
+              <div className="field"><label htmlFor="ts-id">{t("teswirler_login")}</label>
+                <input id="ts-id" className="input" autoComplete="off" value={identifier} onChange={(e) => setIdentifier(e.target.value)} /></div>
+              <div className="field"><label htmlFor="ts-pass">{t("teswirler_password")}</label>
+                <input id="ts-pass" className="input" type="password" autoComplete="off" value={password} onChange={(e) => setPassword(e.target.value)} /></div>
+            </div>
+            <p className="pk-muted" style={{ fontSize: 12, margin: 0 }}>{t("teswirler_password_note")}</p>
+            {err && <div role="alert" className="pk-error">{err}</div>}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <button className="btn btn-primary" type="submit" disabled={busy}>{busy ? t("teswirler_connecting") : t("teswirler_connect")}</button>
+              <button className="btn btn-ghost" type="button" onClick={() => { setOpen(false); setErr(""); setPassword(""); }}>{t("cancel")}</button>
+            </div>
+          </form>
+        )}
+      </div>
     </div>
   );
 }

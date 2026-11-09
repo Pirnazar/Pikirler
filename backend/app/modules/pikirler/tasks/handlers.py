@@ -67,6 +67,9 @@ def register_all() -> None:
     register(voice.TRANSCRIBE_JOB, transcribe_audio, on_dead=transcription_gave_up)
     register(media.PROCESS_JOB, process_attachment)
     register(REINDEX_JOB, reindex_embeddings)
+    from app.modules.pikirler.services import crosspost
+
+    register(crosspost.CROSSPOST_JOB, crosspost.run_job)
     from app.modules.pikirler.services import data_export
 
     register(data_export.EXPORT_JOB, data_export.run_export_job)

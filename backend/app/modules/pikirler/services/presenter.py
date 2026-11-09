@@ -16,6 +16,7 @@ from app.modules.pikirler.schemas.thoughts import (
     ThoughtOut,
     TranscriptionRef,
 )
+from app.modules.pikirler.services import crosspost
 
 
 def media_url(attachment_id: object, variant: str = "content") -> str:
@@ -53,6 +54,7 @@ async def present(db: AsyncSession, thoughts: Sequence[Thought]) -> list[Thought
     counts = await repo.reply_counts(db, ids)
     attachment_ids = [link.attachment_id for t in thoughts for link in t.attachment_links]
     transcripts = await repo.latest_transcriptions(db, attachment_ids)
+    shared = await crosspost.by_thought(db, ids)
     out: list[ThoughtOut] = []
     for t in thoughts:
         tags = sorted(t.tag_links, key=lambda link: link.tag.normalized_name)
@@ -93,6 +95,7 @@ async def present(db: AsyncSession, thoughts: Sequence[Thought]) -> list[Thought
                     if link.attachment.deleted_at is None
                 ],
                 reply_count=counts.get(t.id, 0),
+                crossposts=shared.get(t.id, []),
             )
         )
     return out

@@ -66,12 +66,12 @@ export function AudioPlayer({ a, large }: { a: Attachment; large?: boolean }) {
 }
 
 /** Attachments of a thought, as the design lays them out. */
-export function ThoughtMedia({ attachments, text, large }: { attachments: Attachment[]; text: string; large?: boolean }) {
+export function ThoughtMedia({ attachments, text, large, hasSavedLinks }: { attachments: Attachment[]; text: string; large?: boolean; hasSavedLinks?: boolean }) {
   const images = attachments.filter((a) => a.kind === "image");
   const audio = attachments.filter((a) => a.kind === "audio");
   const video = attachments.filter((a) => a.kind === "video");
   const files = attachments.filter((a) => a.kind === "document" || a.kind === "other");
-  const link = firstLink(text);
+  const link = hasSavedLinks ? null : firstLink(text);
   const n = images.length;
   return (
     <>

@@ -116,6 +116,15 @@ class Settings(BaseSettings):
     teswirler_site_url: str = "https://teswirler.com"
     teswirler_timeout_seconds: float = 20.0
 
+    # --- saved web pages ------------------------------------------------------
+    # Links in a thought are fetched once and kept as a readable copy (title,
+    # text, cover). Only public internet addresses are ever fetched.
+    link_fetch_enabled: bool = True
+    link_fetch_timeout_seconds: float = 15.0
+    link_max_page_bytes: int = 4 * 1024 * 1024
+    link_max_image_bytes: int = 8 * 1024 * 1024
+    link_max_per_thought: int = 5
+
     # --- jobs ---------------------------------------------------------------
     job_max_attempts: int = 5
     job_dispatch_interval_seconds: int = 10

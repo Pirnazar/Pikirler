@@ -20,6 +20,7 @@ from app.modules.pikirler.models import (
     VoiceTranscription,
 )
 from app.modules.pikirler.models.enums import JobStatus, ProcessingStatus
+from app.modules.pikirler.services import links
 from app.storage import get_storage
 
 log = logging.getLogger("pikirler.maintenance")
@@ -76,6 +77,9 @@ async def purge_deleted_thoughts(db: AsyncSession, batch: int = 500) -> dict[str
     if ids:
         # Replies outlive their purged parent; they keep their thread.
         await db.execute(update(Thought).where(Thought.parent_id.in_(ids)).values(parent_id=None))
+        owners = (await db.execute(select(Thought.owner_id).where(Thought.id.in_(ids)))).scalars()
+        for owner_id in set(owners):
+            await links.forget_thoughts(db, owner_id, ids)
         await db.execute(delete(Thought).where(Thought.id.in_(ids)))
     await db.commit()
     return {"thoughts_purged": len(ids)}

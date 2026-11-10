@@ -7,6 +7,7 @@ import { I, Icon } from "./lib/icons";
 import { snip } from "./lib/format";
 import { Composer } from "./components/Composer";
 import { ConfirmDelete, ConnectDialog } from "./components/Dialogs";
+import { Reader } from "./components/SavedLinks";
 import { Recorder } from "./components/Recorder";
 import { RightPanel } from "./components/RightPanel";
 import { HomeView } from "./views/Home";
@@ -281,6 +282,7 @@ export function Shell({ session, theme, setTheme, authMode, onLocked }: {
         {sheet && isMobile && <Composer variant="sheet" onClose={() => { setSheet(false); api.clearComposerPreset(); }} />}
         {recOpen && <Recorder onClose={() => setRecOpen(false)} />}
         {connectFor && <ConnectDialog thought={connectFor} onClose={() => setConnectFor(null)} />}
+        <Reader />
         {deleteFor && <ConfirmDelete snippet={snip(deleteFor.content || t("voice_note"), 120)} onConfirm={() => doDelete(deleteFor)} onCancel={() => setDeleteFor(null)} />}
         {toastState && (
           <div role="status" aria-live="polite" className="pk-toast">

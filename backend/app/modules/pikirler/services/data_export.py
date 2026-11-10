@@ -28,6 +28,7 @@ from app.modules.pikirler.models import (
     AIUsage,
     Attachment,
     Job,
+    LinkSnapshot,
     Owner,
     Project,
     Tag,
@@ -88,6 +89,22 @@ async def build_export(db: AsyncSession, owner_id: uuid.UUID) -> dict[str, Any]:
     project_links: dict[uuid.UUID, list[str]] = {}
     for pl in await all_of(ThoughtProject):
         project_links.setdefault(pl.thought_id, []).append(str(pl.project_id))
+    saved_pages: dict[uuid.UUID, list[dict[str, Any]]] = {}
+    for snap in await all_of(LinkSnapshot, LinkSnapshot.position):
+        if snap.status != "ready":
+            continue
+        saved_pages.setdefault(snap.thought_id, []).append(
+            {
+                "url": snap.url,
+                "final_url": snap.final_url,
+                "site_name": snap.site_name,
+                "title": snap.title,
+                "author": snap.author,
+                "published_at": _iso(snap.published_at),
+                "fetched_at": _iso(snap.fetched_at),
+                "text": snap.content_text,
+            }
+        )
     att_links: dict[uuid.UUID, list[ThoughtAttachment]] = {}
     for al in await all_of(ThoughtAttachment, ThoughtAttachment.position):
         att_links.setdefault(al.thought_id, []).append(al)
@@ -118,6 +135,7 @@ async def build_export(db: AsyncSession, owner_id: uuid.UUID) -> dict[str, Any]:
         ]
         row["project_ids"] = project_links.get(t.id, [])
         row["attachment_ids"] = [str(a.attachment_id) for a in att_links.get(t.id, [])]
+        row["saved_pages"] = saved_pages.get(t.id, [])
         row["revisions"] = _rows(
             revisions.get(t.id, []),
             ["revision_number", "previous_content", "new_content", "change_source", "created_at"],
@@ -234,6 +252,14 @@ def thought_markdown(t: dict[str, Any], tz_name: str) -> tuple[str, str]:
     }
     lines = ["---"] + [f"{k}: {json.dumps(v, ensure_ascii=False)}" for k, v in front.items()]
     lines += ["---", "", t["content"], ""]
+    for page in t.get("saved_pages") or []:
+        lines += ["", "---", "", f"## {page.get('title') or page['url']}", ""]
+        meta = [
+            x for x in (page.get("site_name"), page.get("author"), page.get("published_at")) if x
+        ]
+        if meta:
+            lines += ["*" + " · ".join(meta) + "*", ""]
+        lines += [f"<{page['url']}>", "", page.get("text") or "", ""]
     return path, "\n".join(lines)
 
 
@@ -636,9 +662,18 @@ async def purge_all(db: AsyncSession, owner_id: uuid.UUID) -> dict[str, int]:
     ]
     for key in export_keys:
         await storage.delete(key)
+    covers = await db.execute(
+        select(LinkSnapshot.cover_key).where(
+            LinkSnapshot.owner_id == owner_id, LinkSnapshot.cover_key.is_not(None)
+        )
+    )
+    for key in covers.scalars():
+        if key:
+            await storage.delete(key)
     counts = {}
     await db.execute(update(Thought).where(Thought.owner_id == owner_id).values(parent_id=None))
     for model in (
+        LinkSnapshot,
         ThoughtRelation,
         ThoughtEmbedding,
         VoiceTranscription,

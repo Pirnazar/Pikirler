@@ -14,6 +14,7 @@ from app.modules.pikirler.models.enums import (
 )
 from app.modules.pikirler.schemas.common import Schema
 from app.modules.pikirler.schemas.crosspost import CrosspostOut
+from app.modules.pikirler.schemas.links import LinkOut
 
 MAX_CONTENT_CHARS = 200_000
 MAX_TAGS = 30
@@ -130,6 +131,7 @@ class ThoughtOut(Schema):
     attachments: list[AttachmentRef]
     reply_count: int = 0
     crossposts: list[CrosspostOut] = Field(default_factory=list)
+    links: list[LinkOut] = Field(default_factory=list)
 
 
 class RevisionOut(Schema):

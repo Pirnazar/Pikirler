@@ -1400,6 +1400,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pikirler/links/{link_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Link
+         * @description The saved page with its full text.
+         */
+        get: operations["get_link_api_v1_pikirler_links__link_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/links/{link_id}/refetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Refetch Link
+         * @description Fetch the page again (after a failure, or to update the copy).
+         */
+        post: operations["refetch_link_api_v1_pikirler_links__link_id__refetch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/links/{link_id}/cover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Link Cover */
+        get: operations["link_cover_api_v1_pikirler_links__link_id__cover_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1794,6 +1851,91 @@ export interface components {
             /** Finished At */
             finished_at: string | null;
         };
+        /** LinkDetail */
+        LinkDetail: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Url */
+            url: string;
+            /** Final Url */
+            final_url?: string | null;
+            status: components["schemas"]["LinkStatus"];
+            /** Error Code */
+            error_code?: string | null;
+            /** Site Name */
+            site_name?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Author */
+            author?: string | null;
+            /** Published At */
+            published_at?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /**
+             * Has Text
+             * @default false
+             */
+            has_text: boolean;
+            /** Reading Minutes */
+            reading_minutes?: number | null;
+            /** Cover Url */
+            cover_url?: string | null;
+            /** Fetched At */
+            fetched_at?: string | null;
+            /**
+             * Text
+             * @default
+             */
+            text: string;
+        };
+        /**
+         * LinkOut
+         * @description A link of a thought and the copy of its page kept in Pikirler.
+         */
+        LinkOut: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Url */
+            url: string;
+            /** Final Url */
+            final_url?: string | null;
+            status: components["schemas"]["LinkStatus"];
+            /** Error Code */
+            error_code?: string | null;
+            /** Site Name */
+            site_name?: string | null;
+            /** Title */
+            title?: string | null;
+            /** Author */
+            author?: string | null;
+            /** Published At */
+            published_at?: string | null;
+            /** Excerpt */
+            excerpt?: string | null;
+            /**
+             * Has Text
+             * @default false
+             */
+            has_text: boolean;
+            /** Reading Minutes */
+            reading_minutes?: number | null;
+            /** Cover Url */
+            cover_url?: string | null;
+            /** Fetched At */
+            fetched_at?: string | null;
+        };
+        /**
+         * LinkStatus
+         * @enum {string}
+         */
+        LinkStatus: "pending" | "ready" | "failed";
         /** LoginRequest */
         LoginRequest: {
             /** Email */
@@ -2597,6 +2739,8 @@ export interface components {
             reply_count: number;
             /** Crossposts */
             crossposts?: components["schemas"]["CrosspostOut"][];
+            /** Links */
+            links?: components["schemas"]["LinkOut"][];
         };
         /** ThoughtRequest */
         ThoughtRequest: {
@@ -8807,6 +8951,207 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CrosspostOut"][];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF failure or missing scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found (or owned by someone else) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Magic Word required */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    get_link_api_v1_pikirler_links__link_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkDetail"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF failure or missing scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found (or owned by someone else) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Magic Word required */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    refetch_link_api_v1_pikirler_links__link_id__refetch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkOut"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF failure or missing scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found (or owned by someone else) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Magic Word required */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    link_cover_api_v1_pikirler_links__link_id__cover_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": unknown;
                 };
             };
             /** @description Not authenticated */

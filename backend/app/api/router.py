@@ -8,6 +8,7 @@ from app.api.v1 import (
     crosspost,
     data,
     integrations,
+    links,
     media,
     memories,
     projects,
@@ -39,3 +40,4 @@ api_router.include_router(ai.router)
 api_router.include_router(data.router)
 api_router.include_router(integrations.router)
 api_router.include_router(crosspost.router)
+api_router.include_router(links.router)

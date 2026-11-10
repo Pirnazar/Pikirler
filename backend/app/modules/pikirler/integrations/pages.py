@@ -49,7 +49,9 @@ class Page:
     image_url: str | None = None
     # Teswirler only: every comment with its replies (None = not available).
     comments: list[dict[str, Any]] | None = None
-    comment_count: int | None = None
+    # True when every comment page and reply list was read: only then may a
+    # comment missing from ``comments`` be taken as deleted on the site.
+    comments_complete: bool = False
 
     def finish(self) -> Page:
         self.text = tidy(self.text)[:MAX_TEXT_CHARS]
@@ -231,8 +233,9 @@ async def _from_teswirler(url: str, api_path: str) -> Page | None:
     if isinstance(item_id, str) and item_id:
         kind = "blogs" if api_path.startswith("/blogs/") else "pikirler"
         try:
-            page.comments = await _teswirler_comments(f"{api}/{kind}/{quote(item_id, safe='')}")
-            page.comment_count = _count(page.comments)
+            page.comments, page.comments_complete = await _teswirler_comments(
+                f"{api}/{kind}/{quote(item_id, safe='')}"
+            )
         except web.FetchError:
             page.comments = None  # the article is still saved, just without comments
     return page
@@ -241,21 +244,22 @@ async def _from_teswirler(url: str, api_path: str) -> Page | None:
 COMMENT_PAGE = 50  # Teswirler refuses larger pages
 MAX_COMMENTS = 2000
 MAX_COMMENT_REQUESTS = 300
-MAX_REPLY_DEPTH = 4
+MAX_REPLY_DEPTH = 20
 
 
-def _count(comments: list[dict[str, Any]]) -> int:
-    return sum(1 + _count(c.get("replies") or []) for c in comments)
-
-
-async def _teswirler_comments(base: str) -> list[dict[str, Any]]:
-    """Every comment of an article or pikir, oldest first, with nested replies."""
+async def _teswirler_comments(base: str) -> tuple[list[dict[str, Any]], bool]:
+    """Every comment of an article or pikir, oldest first, with nested replies,
+    and whether the list is complete (no limit was hit, nothing was skipped)."""
     budget = {"requests": MAX_COMMENT_REQUESTS, "comments": MAX_COMMENTS}
+    state = {"complete": True}
 
     async def page_of(path: str) -> list[dict[str, Any]]:
         rows: list[dict[str, Any]] = []
         skip = 0
-        while budget["requests"] > 0 and budget["comments"] > 0:
+        while True:
+            if budget["requests"] <= 0 or budget["comments"] <= 0:
+                state["complete"] = False
+                break
             budget["requests"] -= 1
             got = await web.fetch(
                 f"{path}?skip={skip}&take={COMMENT_PAGE}",
@@ -266,9 +270,11 @@ async def _teswirler_comments(base: str) -> list[dict[str, Any]]:
             try:
                 data = json.loads(got.body).get("data")
             except (ValueError, AttributeError):
+                state["complete"] = False
                 break
             items = data if isinstance(data, list) else (data or {}).get("items")
             if not isinstance(items, list):
+                state["complete"] = False
                 break
             rows.extend(i for i in items if isinstance(i, dict))
             budget["comments"] -= len(items)
@@ -285,16 +291,17 @@ async def _teswirler_comments(base: str) -> list[dict[str, Any]]:
             comment_id = raw.get("id")
             quote_text = raw.get("quote")
             replies: list[dict[str, Any]] = []
-            if (
-                isinstance(comment_id, str)
-                and isinstance(raw.get("repliesCount"), int)
-                and raw["repliesCount"] > 0
-                and depth < MAX_REPLY_DEPTH
-            ):
+            has_replies = isinstance(raw.get("repliesCount"), int) and raw["repliesCount"] > 0
+            if has_replies and depth >= MAX_REPLY_DEPTH:
+                state["complete"] = False
+            elif has_replies and isinstance(comment_id, str):
                 replies = await tree(
                     f"{base}/comments/{quote(comment_id, safe='')}/replies", depth + 1
                 )
             created = _date(raw.get("createdAt"))
+            image = raw.get("image")
+            if isinstance(image, dict):
+                image = image.get("url")
             out.append(
                 {
                     "id": str(comment_id) if comment_id else None,
@@ -304,13 +311,111 @@ async def _teswirler_comments(base: str) -> list[dict[str, Any]]:
                     "quote": tidy(quote_text)[:2000] if isinstance(quote_text, str) else None,
                     "created_at": created.isoformat() if created else None,
                     "likes": raw.get("likesCount") if isinstance(raw.get("likesCount"), int) else 0,
+                    "image_url": image
+                    if isinstance(image, str) and image.startswith("https://")
+                    else None,
                     "replies": replies,
                 }
             )
         out.sort(key=lambda c: c["created_at"] or "")
         return out
 
-    return await tree(f"{base}/comments", 0)
+    comments = await tree(f"{base}/comments", 0)
+    return comments, state["complete"]
+
+
+# --- X (Twitter) ------------------------------------------------------------------
+#
+# X's own pages need JavaScript and its API is paid, but X serves every public
+# post through oEmbed for free and without keys: text, author name, @username
+# and date. A deleted or private post answers 404, which the background check
+# turns into "original deleted". Replies are not available this way.
+
+X_HOSTS = {"x.com", "www.x.com", "twitter.com", "www.twitter.com", "mobile.twitter.com",
+           "mobile.x.com"}  # fmt: skip
+X_OEMBED = "https://publish.x.com/oembed"
+_X_EPOCH_MS = 1288834974657  # snowflake ids carry their creation time
+
+
+def x_status(url: str) -> tuple[str, str] | None:
+    """(username, post id) of a link to an X post, else None."""
+    parts = urlsplit(url)
+    if (parts.hostname or "").lower() not in X_HOSTS:
+        return None
+    segments = [s for s in parts.path.split("/") if s]
+    if len(segments) >= 3 and segments[1] in ("status", "statuses") and segments[2].isdigit():
+        return segments[0], segments[2]
+    return None
+
+
+def _snowflake_time(post_id: str) -> datetime | None:
+    value = int(post_id)
+    if value < 2**40:  # posts from before 2010 have plain counters
+        return None
+    return datetime.fromtimestamp(((value >> 22) + _X_EPOCH_MS) / 1000, tz=UTC)
+
+
+class _XPost(HTMLParser):
+    """Reads the <blockquote> oEmbed returns: <p>text</p>&mdash; Name (@user) <a>date</a>."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.text: list[str] = []
+        self.after: list[str] = []
+        self.in_p = 0
+        self.done_p = False
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        if tag == "p" and not self.done_p:
+            self.in_p += 1
+        elif tag == "br" and self.in_p:
+            self.text.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "p" and self.in_p:
+            self.in_p -= 1
+            self.done_p = self.in_p == 0
+
+    def handle_data(self, data: str) -> None:
+        (self.text if self.in_p else self.after).append(data)
+
+
+async def _from_x(url: str, username: str, post_id: str) -> Page:
+    canonical = f"https://x.com/{quote(username, safe='')}/status/{post_id}"
+    got = await web.fetch(
+        f"{X_OEMBED}?url={quote(canonical, safe='')}&omit_script=1&dnt=1&lang=en",
+        kinds=("application/json",),
+        max_bytes=512 * 1024,
+        accept="application/json",
+    )
+    try:
+        data = json.loads(got.body)
+    except ValueError as exc:
+        raise web.Unreachable("unexpected answer from X") from exc
+    if not isinstance(data, dict) or not isinstance(data.get("html"), str):
+        raise web.Unreachable("unexpected answer from X")
+    parser = _XPost()
+    parser.feed(data["html"])
+    parser.close()
+    handle = urlsplit(str(data.get("author_url") or "")).path.strip("/") or username
+    published = _snowflake_time(post_id)
+    if published is None:
+        tail = "".join(parser.after)
+        m = re.search(r"([A-Z][a-z]+ \d{1,2}, \d{4})\s*$", tail.strip())
+        if m:
+            try:
+                published = datetime.strptime(m.group(1), "%B %d, %Y").replace(tzinfo=UTC)
+            except ValueError:
+                published = None
+    return Page(
+        final_url=canonical,
+        kind="post",
+        site_name="X",
+        author=data.get("author_name") if isinstance(data.get("author_name"), str) else handle,
+        author_username=handle,
+        published_at=published,
+        text="".join(parser.text),
+    )
 
 
 # --- any other site ---------------------------------------------------------------
@@ -364,6 +469,9 @@ def _extract_html(body: bytes, url: str) -> Page:
 
 async def extract(url: str) -> Page:
     """Fetch ``url`` and return its readable content. Raises ``web.FetchError``."""
+    post = x_status(url)
+    if post:
+        return (await _from_x(url, *post)).finish()
     api_path = teswirler_api_path(url)
     if api_path:
         page = await _from_teswirler(url, api_path)

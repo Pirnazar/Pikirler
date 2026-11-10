@@ -284,7 +284,8 @@ def _markdown_comments(comments: list[Any], depth: int) -> list[str]:
             who += f" (@{c['username']})"
         when = f", {c['created_at']}" if c.get("created_at") else ""
         text = " ".join((c.get("text") or "").split())
-        lines.append(f"{pad}- **{who}**{when}: {text}")
+        gone = f" *(deleted on the site {c['deleted_at']})*" if c.get("deleted_at") else ""
+        lines.append(f"{pad}- **{who}**{when}: {text}{gone}")
         lines += _markdown_comments(c.get("replies") or [], depth + 1)
     if depth == 0:
         lines.append("")

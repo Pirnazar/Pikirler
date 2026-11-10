@@ -9028,7 +9028,39 @@
               }
             ],
             "title": "Comment Count",
-            "description": "Saved comments incl. replies; null when the site has none"
+            "description": "Comments incl. replies still on the site; null when none kept"
+          },
+          "deleted_comment_count": {
+            "type": "integer",
+            "title": "Deleted Comment Count",
+            "description": "Kept comments deleted on the site",
+            "default": 0
+          },
+          "synced_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synced At",
+            "description": "Last check against the original"
+          },
+          "source_deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Deleted At",
+            "description": "When the original was found deleted; the copy is kept"
           },
           "post_text": {
             "anyOf": [
@@ -9248,7 +9280,39 @@
               }
             ],
             "title": "Comment Count",
-            "description": "Saved comments incl. replies; null when the site has none"
+            "description": "Comments incl. replies still on the site; null when none kept"
+          },
+          "deleted_comment_count": {
+            "type": "integer",
+            "title": "Deleted Comment Count",
+            "description": "Kept comments deleted on the site",
+            "default": 0
+          },
+          "synced_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synced At",
+            "description": "Last check against the original"
+          },
+          "source_deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Deleted At",
+            "description": "When the original was found deleted; the copy is kept"
           },
           "post_text": {
             "anyOf": [
@@ -10441,6 +10505,30 @@
             "type": "integer",
             "title": "Likes",
             "default": 0
+          },
+          "image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Url"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At",
+            "description": "Set when the comment disappeared from the site"
           },
           "replies": {
             "items": {

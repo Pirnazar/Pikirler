@@ -17,7 +17,7 @@ from app.core.config import get_settings
 from app.core.database import get_database
 from app.core.logging import configure_logging
 from app.core.redis import close_redis
-from app.modules.pikirler.services import jobs, maintenance
+from app.modules.pikirler.services import jobs, links, maintenance
 from app.modules.pikirler.tasks import runner
 from app.modules.pikirler.tasks.handlers import ensure_registered
 
@@ -31,6 +31,12 @@ async def run_job(ctx: dict[str, Any], job_id: str) -> str:
 async def dispatch(ctx: dict[str, Any]) -> int:
     async with get_database().sessionmaker() as db:
         return await jobs.dispatch_due(db)
+
+
+async def sync_links(ctx: dict[str, Any]) -> int:
+    """Queue background checks of saved Teswirler copies that are due."""
+    async with get_database().sessionmaker() as db:
+        return await links.schedule_sync(db)
 
 
 async def cleanup(ctx: dict[str, Any]) -> dict[str, Any]:
@@ -68,6 +74,7 @@ class WorkerSettings:
             unique=True,
         ),
         cron(cleanup, minute={17}, unique=True),
+        cron(sync_links, minute=set(range(3, 60, 10)), unique=True),
     ]
     on_startup = startup
     on_shutdown = shutdown

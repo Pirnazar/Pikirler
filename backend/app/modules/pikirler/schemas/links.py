@@ -29,7 +29,12 @@ class LinkOut(Schema):
     published_at: datetime | None = None
     edited_at: datetime | None = None
     comment_count: int | None = Field(
-        default=None, description="Saved comments incl. replies; null when the site has none"
+        default=None, description="Comments incl. replies still on the site; null when none kept"
+    )
+    deleted_comment_count: int = Field(default=0, description="Kept comments deleted on the site")
+    synced_at: datetime | None = Field(default=None, description="Last check against the original")
+    source_deleted_at: datetime | None = Field(
+        default=None, description="When the original was found deleted; the copy is kept"
     )
     post_text: str | None = Field(default=None, description="Full text of a short post")
     excerpt: str | None = None
@@ -48,6 +53,10 @@ class SavedComment(Schema):
     quote: str | None = None
     created_at: datetime | None = None
     likes: int = 0
+    image_url: str | None = None
+    deleted_at: datetime | None = Field(
+        default=None, description="Set when the comment disappeared from the site"
+    )
     replies: list[SavedComment] = Field(default_factory=list)
 
 

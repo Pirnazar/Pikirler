@@ -1888,9 +1888,25 @@ export interface components {
             edited_at?: string | null;
             /**
              * Comment Count
-             * @description Saved comments incl. replies; null when the site has none
+             * @description Comments incl. replies still on the site; null when none kept
              */
             comment_count?: number | null;
+            /**
+             * Deleted Comment Count
+             * @description Kept comments deleted on the site
+             * @default 0
+             */
+            deleted_comment_count: number;
+            /**
+             * Synced At
+             * @description Last check against the original
+             */
+            synced_at?: string | null;
+            /**
+             * Source Deleted At
+             * @description When the original was found deleted; the copy is kept
+             */
+            source_deleted_at?: string | null;
             /**
              * Post Text
              * @description Full text of a short post
@@ -1957,9 +1973,25 @@ export interface components {
             edited_at?: string | null;
             /**
              * Comment Count
-             * @description Saved comments incl. replies; null when the site has none
+             * @description Comments incl. replies still on the site; null when none kept
              */
             comment_count?: number | null;
+            /**
+             * Deleted Comment Count
+             * @description Kept comments deleted on the site
+             * @default 0
+             */
+            deleted_comment_count: number;
+            /**
+             * Synced At
+             * @description Last check against the original
+             */
+            synced_at?: string | null;
+            /**
+             * Source Deleted At
+             * @description When the original was found deleted; the copy is kept
+             */
+            source_deleted_at?: string | null;
             /**
              * Post Text
              * @description Full text of a short post
@@ -2419,6 +2451,13 @@ export interface components {
              * @default 0
              */
             likes: number;
+            /** Image Url */
+            image_url?: string | null;
+            /**
+             * Deleted At
+             * @description Set when the comment disappeared from the site
+             */
+            deleted_at?: string | null;
             /** Replies */
             replies?: components["schemas"]["SavedComment"][];
         };

@@ -52,10 +52,16 @@ class LinkSnapshot(Base):
     content_text: Mapped[str | None] = mapped_column(Text)
     word_count: Mapped[int | None] = mapped_column(Integer)
     cover_key: Mapped[str | None] = mapped_column(Text)
-    # Comments as they were when the copy was made (Teswirler only), as a tree:
-    # [{id, author, username, text, quote, created_at, likes, replies: [...]}]
+    # Comments (Teswirler only), as a tree kept in step with the site:
+    # [{id, author, username, text, quote, created_at, likes, image_url,
+    #   deleted_at, replies: [...]}]; ``deleted_at`` marks one gone on the site.
     comments: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
     comment_count: Mapped[int | None] = mapped_column(Integer)
+    deleted_comment_count: Mapped[int | None] = mapped_column(Integer)
+    # Background sync with the original (Teswirler): when it last ran, and when
+    # the original was found gone (the copy is kept).
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    source_deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     fetched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

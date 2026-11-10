@@ -127,6 +127,10 @@ class Settings(BaseSettings):
     # Keep saved Teswirler copies in step with the site (new comments, deleted
     # ones marked, edits). Fresh posts are checked often, old ones rarely.
     link_sync_enabled: bool = True
+    # YouTube / TikTok / Instagram: the video itself is downloaded into the
+    # storage (up to 720p), within these limits. 0 MB turns downloading off.
+    link_media_max_mb: int = 500
+    link_media_max_minutes: int = 120
 
     # --- jobs ---------------------------------------------------------------
     job_max_attempts: int = 5

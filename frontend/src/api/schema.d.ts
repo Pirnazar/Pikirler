@@ -1921,6 +1921,20 @@ export interface components {
             has_text: boolean;
             /** Reading Minutes */
             reading_minutes?: number | null;
+            /**
+             * Duration Seconds
+             * @description Videos: length
+             */
+            duration_seconds?: number | null;
+            /**
+             * Media Status
+             * @description Downloaded video: null where none is downloaded
+             */
+            media_status?: ("pending" | "ready" | "failed") | null;
+            /** Media Error */
+            media_error?: string | null;
+            /** @description The downloaded video */
+            media?: components["schemas"]["LinkMedia"] | null;
             /** Cover Url */
             cover_url?: string | null;
             /** Fetched At */
@@ -1932,6 +1946,33 @@ export interface components {
             text: string;
             /** Comments */
             comments?: components["schemas"]["SavedComment"][];
+        };
+        /**
+         * LinkMedia
+         * @description The video downloaded from the link, served like any attachment.
+         */
+        LinkMedia: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Mime Type */
+            mime_type: string;
+            /** File Size */
+            file_size: number;
+            /** Processing Status */
+            processing_status: string;
+            /** Width */
+            width?: number | null;
+            /** Height */
+            height?: number | null;
+            /** Duration Seconds */
+            duration_seconds?: number | null;
+            /** Content Url */
+            content_url: string;
+            /** Thumbnail Url */
+            thumbnail_url?: string | null;
         };
         /**
          * LinkOut
@@ -2006,6 +2047,20 @@ export interface components {
             has_text: boolean;
             /** Reading Minutes */
             reading_minutes?: number | null;
+            /**
+             * Duration Seconds
+             * @description Videos: length
+             */
+            duration_seconds?: number | null;
+            /**
+             * Media Status
+             * @description Downloaded video: null where none is downloaded
+             */
+            media_status?: ("pending" | "ready" | "failed") | null;
+            /** Media Error */
+            media_error?: string | null;
+            /** @description The downloaded video */
+            media?: components["schemas"]["LinkMedia"] | null;
             /** Cover Url */
             cover_url?: string | null;
             /** Fetched At */

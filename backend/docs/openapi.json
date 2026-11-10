@@ -9101,6 +9101,57 @@
             ],
             "title": "Reading Minutes"
           },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds",
+            "description": "Videos: length"
+          },
+          "media_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "ready",
+                  "failed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Status",
+            "description": "Downloaded video: null where none is downloaded"
+          },
+          "media_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Error"
+          },
+          "media": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LinkMedia"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The downloaded video"
+          },
           "cover_url": {
             "anyOf": [
               {
@@ -9144,6 +9195,85 @@
           "status"
         ],
         "title": "LinkDetail"
+      },
+      "LinkMedia": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "mime_type": {
+            "type": "string",
+            "title": "Mime Type"
+          },
+          "file_size": {
+            "type": "integer",
+            "title": "File Size"
+          },
+          "processing_status": {
+            "type": "string",
+            "title": "Processing Status"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds"
+          },
+          "content_url": {
+            "type": "string",
+            "title": "Content Url"
+          },
+          "thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumbnail Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "mime_type",
+          "file_size",
+          "processing_status",
+          "content_url"
+        ],
+        "title": "LinkMedia",
+        "description": "The video downloaded from the link, served like any attachment."
       },
       "LinkOut": {
         "properties": {
@@ -9352,6 +9482,57 @@
               }
             ],
             "title": "Reading Minutes"
+          },
+          "duration_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Seconds",
+            "description": "Videos: length"
+          },
+          "media_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "ready",
+                  "failed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Status",
+            "description": "Downloaded video: null where none is downloaded"
+          },
+          "media_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Media Error"
+          },
+          "media": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LinkMedia"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The downloaded video"
           },
           "cover_url": {
             "anyOf": [

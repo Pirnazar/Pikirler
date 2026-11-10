@@ -10,6 +10,20 @@ from app.modules.pikirler.models.enums import LinkStatus
 from app.modules.pikirler.schemas.common import Schema
 
 
+class LinkMedia(Schema):
+    """The video downloaded from the link, served like any attachment."""
+
+    id: uuid.UUID
+    mime_type: str
+    file_size: int
+    processing_status: str
+    width: int | None = None
+    height: int | None = None
+    duration_seconds: float | None = None
+    content_url: str
+    thumbnail_url: str | None = None
+
+
 class LinkOut(Schema):
     """A link of a thought and the copy of its page kept in Pikirler."""
 
@@ -40,6 +54,12 @@ class LinkOut(Schema):
     excerpt: str | None = None
     has_text: bool = False
     reading_minutes: int | None = None
+    duration_seconds: int | None = Field(default=None, description="Videos: length")
+    media_status: Literal["pending", "ready", "failed"] | None = Field(
+        default=None, description="Downloaded video: null where none is downloaded"
+    )
+    media_error: str | None = None
+    media: LinkMedia | None = Field(default=None, description="The downloaded video")
     cover_url: str | None = None
     fetched_at: datetime | None = None
 

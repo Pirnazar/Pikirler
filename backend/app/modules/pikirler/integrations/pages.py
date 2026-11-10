@@ -52,6 +52,7 @@ class Page:
     # True when every comment page and reply list was read: only then may a
     # comment missing from ``comments`` be taken as deleted on the site.
     comments_complete: bool = False
+    duration_seconds: int | None = None
 
     def finish(self) -> Page:
         self.text = tidy(self.text)[:MAX_TEXT_CHARS]
@@ -472,6 +473,15 @@ async def extract(url: str) -> Page:
     post = x_status(url)
     if post:
         return (await _from_x(url, *post)).finish()
+    from app.modules.pikirler.integrations import video_sites
+
+    video = video_sites.youtube_id(url)
+    if video:
+        return (await video_sites.from_youtube(video)).finish()
+    if video_sites.is_tiktok(url):
+        return (await video_sites.from_tiktok(url)).finish()
+    if video_sites.is_instagram_post(url):
+        return (await video_sites.from_instagram(url)).finish()
     api_path = teswirler_api_path(url)
     if api_path:
         page = await _from_teswirler(url, api_path)

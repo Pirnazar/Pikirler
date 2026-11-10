@@ -106,6 +106,56 @@ X_OEMBED = {
     "provider_name": "X",
 }
 
+YT_PLAYER = {
+    "playabilityStatus": {"status": "OK"},
+    "videoDetails": {
+        "videoId": "dQw4w9WgXcQ",
+        "title": "Aşgabat gijesi",
+        "author": "Merdan TV",
+        "lengthSeconds": "212",
+        "shortDescription": "Gijeki şäher.\n\nSurata düşüren: Merdan.",
+        "thumbnail": {"thumbnails": [{"url": "https://cdn.example.org/yt.png"}]},
+    },
+    "microformat": {
+        "playerMicroformatRenderer": {
+            "publishDate": "2026-11-01T08:00:00-07:00",
+            "ownerProfileUrl": "http://www.youtube.com/@merdantv",
+            "ownerChannelName": "Merdan TV",
+        }
+    },
+}
+YT_PAGE = (
+    "<html><head><title>x</title></head><body><script>var ytInitialPlayerResponse = "
+    + json.dumps(YT_PLAYER)
+    + ";var meta = 1;</script></body></html>"
+)
+YT_GONE = (
+    "<html><body><script>var ytInitialPlayerResponse = "
+    + json.dumps({"playabilityStatus": {"status": "ERROR", "reason": "Video unavailable"}})
+    + ";</script></body></html>"
+)
+TT_DATA = {
+    "__DEFAULT_SCOPE__": {
+        "webapp.video-detail": {
+            "statusCode": 0,
+            "itemInfo": {
+                "itemStruct": {
+                    "id": "7300000000000000000",
+                    "desc": "Halyçy eje #türkmen",
+                    "createTime": "1731000000",
+                    "author": {"uniqueId": "halyci", "nickname": "Halyçy"},
+                    "video": {"cover": "https://cdn.example.org/tt.png", "duration": 31},
+                }
+            },
+        }
+    }
+}
+TT_PAGE = (
+    '<html><body><script id="__UNIVERSAL_DATA_FOR_REHYDRATION__" type="application/json">'
+    + json.dumps(TT_DATA)
+    + "</script></body></html>"
+)
+
 PUBLIC = {
     "news.example.org": "93.184.216.34",
     "cdn.example.org": "93.184.216.35",
@@ -114,6 +164,9 @@ PUBLIC = {
     "sneaky.example.org": "10.0.0.5",
     "moved.example.org": "93.184.216.36",
     "publish.x.com": "104.244.42.1",
+    "www.youtube.com": "142.250.1.1",
+    "www.tiktok.com": "23.1.1.1",
+    "www.instagram.com": "157.240.1.1",
 }
 
 
@@ -158,6 +211,16 @@ class FakeWeb:
             if target == "https://x.com/aynamyrat/status/1855000000000000000":
                 return httpx.Response(200, json=X_OEMBED)
             return httpx.Response(404, json={"error": "not found"})
+        if host == "www.youtube.com" and path == "/watch":
+            vid = request.url.params["v"]
+            page = YT_PAGE if vid == "dQw4w9WgXcQ" else YT_GONE
+            return httpx.Response(200, text=page, headers={"content-type": "text/html"})
+        if host == "www.tiktok.com" and path.startswith("/@halyci/video/"):
+            return httpx.Response(200, text=TT_PAGE, headers={"content-type": "text/html"})
+        if host == "www.instagram.com":
+            return httpx.Response(
+                200, text="<html><body>Log in</body></html>", headers={"content-type": "text/html"}
+            )
         if host == "moved.example.org":
             return httpx.Response(302, headers={"location": "http://192.168.1.8/admin"})
         if host == "news.example.org" and path == "/file.zip":
@@ -653,3 +716,154 @@ async def test_missing_x_post_fails_cleanly(client: httpx.AsyncClient, fake_web:
     await run_jobs()
     link = await _link(client, created["id"])
     assert (link["status"], link["error_code"]) == ("failed", "link_not_found")
+
+
+# --- YouTube, TikTok, Instagram: description and the video itself ----------------------
+
+
+@pytest.fixture
+def fake_video() -> Iterator[list[str]]:
+    """Downloads write a small file instead of using the network."""
+    from app.modules.pikirler.integrations import media_download
+
+    asked: list[str] = []
+
+    def download(url: str, workdir: str) -> media_download.Downloaded:
+        asked.append(url)
+        path = f"{workdir}/media.mp4"
+        with open(path, "wb") as fh:
+            fh.write(b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 2000)
+        return media_download.Downloaded(path=path, mime_type="video/mp4", filename="video.mp4")
+
+    media_download.set_downloader(download)
+    yield asked
+    media_download.set_downloader(None)
+
+
+def test_video_site_links() -> None:
+    from app.modules.pikirler.integrations import video_sites as v
+
+    assert v.youtube_id("https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10") == "dQw4w9WgXcQ"
+    assert v.youtube_id("https://youtu.be/dQw4w9WgXcQ?si=abc") == "dQw4w9WgXcQ"
+    assert v.youtube_id("https://www.youtube.com/shorts/dQw4w9WgXcQ") == "dQw4w9WgXcQ"
+    assert v.youtube_id("https://www.youtube.com/@merdantv") is None
+    assert v.is_tiktok("https://vm.tiktok.com/ZMabc/")
+    assert v.is_instagram_post("https://www.instagram.com/reel/C5yBwOqoLZ7/?igsh=x")
+    assert not v.is_instagram_post("https://www.instagram.com/merdan/")
+
+
+async def test_youtube_video_with_description_and_file(
+    client: httpx.AsyncClient, fake_web: FakeWeb, fake_video: list[str]
+) -> None:
+    created = await new_thought(client, "Gör: https://youtu.be/dQw4w9WgXcQ?si=share")
+    await run_jobs("fetch_link")
+    link = await _link(client, created["id"])
+    assert link["status"] == "ready"
+    assert (link["site_name"], link["title"], link["author"]) == (
+        "YouTube",
+        "Aşgabat gijesi",
+        "Merdan TV",
+    )
+    assert link["author_username"] == "merdantv"
+    assert link["author_url"] == "https://www.youtube.com/@merdantv"
+    assert link["published_at"].startswith("2026-11-01T15:00:00")
+    assert link["duration_seconds"] == 212
+    assert link["comment_count"] is None  # no comments for video sites
+    assert link["media_status"] == "pending"
+    detail = (await client.get(f"/links/{link['id']}")).json()
+    assert detail["text"] == "Gijeki şäher.\n\nSurata düşüren: Merdan."
+
+    await run_jobs("download_link_media")
+    assert fake_video == ["https://www.youtube.com/watch?v=dQw4w9WgXcQ"]
+    link = await _link(client, created["id"])
+    assert link["media_status"] == "ready"
+    assert link["media"]["mime_type"] == "video/mp4"
+    video = await client.get(link["media"]["content_url"].removeprefix("/api/v1/pikirler"))
+    assert video.status_code in (200, 206)
+    assert video.content.startswith(b"\x00\x00\x00\x18ftyp")
+
+    # The file belongs to the saved page: housekeeping does not treat it as orphaned.
+    from datetime import timedelta
+
+    from app.modules.pikirler.models import Attachment
+    from app.modules.pikirler.services import maintenance
+
+    async with get_database().sessionmaker() as db:
+        await db.execute(update(Attachment).values(uploaded_at=utcnow() - timedelta(days=30)))
+        await db.commit()
+        await maintenance.cleanup_media(db)
+    assert (await _link(client, created["id"]))["media"] is not None
+
+    # A background check does not download it again.
+    await _sync_now()
+    await run_jobs("download_link_media")
+    assert len(fake_video) == 1
+
+
+async def test_tiktok_video(
+    client: httpx.AsyncClient, fake_web: FakeWeb, fake_video: list[str]
+) -> None:
+    created = await new_thought(client, "https://www.tiktok.com/@halyci/video/7300000000000000000")
+    await run_jobs()
+    link = await _link(client, created["id"])
+    assert link["status"] == "ready"
+    assert (link["site_name"], link["kind"], link["author"], link["author_username"]) == (
+        "TikTok",
+        "post",
+        "Halyçy",
+        "halyci",
+    )
+    assert link["post_text"] == "Halyçy eje #türkmen"
+    assert link["published_at"].startswith("2024-11-07")
+    assert link["author_url"] == "https://www.tiktok.com/@halyci"
+    assert link["media_status"] == "ready"
+
+
+async def test_removed_youtube_video(
+    client: httpx.AsyncClient, fake_web: FakeWeb, fake_video: list[str]
+) -> None:
+    created = await new_thought(client, "https://www.youtube.com/watch?v=aaaaaaaaaaa")
+    await run_jobs()
+    link = await _link(client, created["id"])
+    assert (link["status"], link["error_code"]) == ("failed", "link_not_found")
+    assert fake_video == []
+
+
+async def test_instagram_behind_login(
+    client: httpx.AsyncClient, fake_web: FakeWeb, fake_video: list[str]
+) -> None:
+    created = await new_thought(client, "https://www.instagram.com/p/C5yBwOqoLZ7/")
+    await run_jobs()
+    link = await _link(client, created["id"])
+    assert (link["status"], link["error_code"]) == ("failed", "link_login_required")
+
+
+async def test_failed_download_keeps_the_page(client: httpx.AsyncClient, fake_web: FakeWeb) -> None:
+    from app.modules.pikirler.integrations import media_download
+
+    def refuse(url: str, workdir: str) -> media_download.Downloaded:
+        raise media_download.MediaError("Sign in to confirm", code="media_login_required")
+
+    media_download.set_downloader(refuse)
+    try:
+        created = await new_thought(client, "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        await run_jobs()
+    finally:
+        media_download.set_downloader(None)
+    link = await _link(client, created["id"])
+    assert link["status"] == "ready"
+    assert (link["media_status"], link["media_error"]) == ("failed", "media_login_required")
+    assert link["title"] == "Aşgabat gijesi"
+
+
+def test_download_options_accept_short_and_unknown_length_videos() -> None:
+    """yt-dlp's match filter: short or unknown length passes, too long is skipped."""
+    from yt_dlp.utils import match_filter_func
+
+    from app.core.config import get_settings
+
+    limit = get_settings().link_media_max_minutes * 60
+    keep = match_filter_func([f"duration < {limit}", "!duration"])
+    assert keep({"duration": 19}) is None
+    assert keep({"id": "x"}) is None
+    assert keep({"duration": limit + 1}) is not None

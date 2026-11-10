@@ -10,9 +10,12 @@ of links that are still there and drops the others.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import io
 import logging
+import os
 import re
+import tempfile
 import uuid
 from collections.abc import Sequence
 from datetime import timedelta
@@ -26,16 +29,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.database import utcnow
 from app.core.exceptions import NotFound
-from app.modules.pikirler.integrations import pages, web
-from app.modules.pikirler.models import LinkSnapshot, Thought
-from app.modules.pikirler.models.enums import LinkStatus
-from app.modules.pikirler.schemas.links import LinkDetail, LinkOut, SavedComment
-from app.modules.pikirler.services import jobs
+from app.modules.pikirler.integrations import media_download, pages, web
+from app.modules.pikirler.models import Attachment, LinkSnapshot, Thought
+from app.modules.pikirler.models.enums import AttachmentKind, LinkStatus, ProcessingStatus
+from app.modules.pikirler.schemas.links import LinkDetail, LinkMedia, LinkOut, SavedComment
+from app.modules.pikirler.services import jobs, media
 from app.storage import get_storage
 
 log = logging.getLogger("pikirler.links")
 
 FETCH_JOB = "fetch_link"
+MEDIA_JOB = "download_link_media"
+MEDIA_SITES = {"YouTube", "TikTok", "Instagram"}
 SYNC_JOB = "sync_link"
 SYNC_BATCH = 20
 DELETE_COVERS_JOB = "delete_link_covers"
@@ -173,8 +178,15 @@ POST_TEXT_CHARS = 1200
 def _profile_url(row_site: str | None, username: str | None) -> str | None:
     if not username:
         return None
-    if row_site == "X":
-        return f"https://x.com/{quote(username, safe='')}"
+    handle = quote(username, safe="")
+    profiles = {
+        "X": f"https://x.com/{handle}",
+        "YouTube": f"https://www.youtube.com/@{handle}",
+        "TikTok": f"https://www.tiktok.com/@{handle}",
+        "Instagram": f"https://www.instagram.com/{handle}/",
+    }
+    if row_site in profiles:
+        return profiles[row_site]
     if row_site != "Teswirler":
         return None
     site = get_settings().teswirler_site_url.rstrip("/")
@@ -206,7 +218,35 @@ def _post_text(row: LinkSnapshot) -> str | None:
     return text[: POST_TEXT_CHARS - 1].rsplit(" ", 1)[0] + "…"
 
 
-def out(row: LinkSnapshot) -> LinkOut:
+def _media(att: Attachment | None) -> LinkMedia | None:
+    if att is None or att.deleted_at is not None:
+        return None
+    return LinkMedia(
+        id=att.id,
+        mime_type=att.mime_type,
+        file_size=att.file_size,
+        processing_status=att.processing_status,
+        width=att.width,
+        height=att.height,
+        duration_seconds=att.duration_seconds,
+        content_url=_media_url(att.id),
+        thumbnail_url=_media_url(att.id, "thumbnail") if att.thumbnail_key else None,
+    )
+
+
+def _media_url(attachment_id: uuid.UUID, variant: str = "content") -> str:
+    return f"{get_settings().api_prefix}/media/{attachment_id}/{variant}"
+
+
+async def _media_of(db: AsyncSession, rows: Sequence[LinkSnapshot]) -> dict[uuid.UUID, Attachment]:
+    ids = [r.media_attachment_id for r in rows if r.media_attachment_id]
+    if not ids:
+        return {}
+    found = (await db.execute(select(Attachment).where(Attachment.id.in_(ids)))).scalars()
+    return {a.id: a for a in found}
+
+
+def out(row: LinkSnapshot, media_att: Attachment | None = None) -> LinkOut:
     return LinkOut(
         id=row.id,
         url=row.url,
@@ -228,7 +268,13 @@ def out(row: LinkSnapshot) -> LinkOut:
         post_text=_post_text(row),
         excerpt=row.excerpt,
         has_text=bool(row.content_text),
-        reading_minutes=_reading_minutes(row.word_count),
+        reading_minutes=None if row.duration_seconds else _reading_minutes(row.word_count),
+        duration_seconds=row.duration_seconds,
+        media_status=row.media_status
+        if row.media_status in ("pending", "ready", "failed")
+        else None,
+        media_error=row.media_error,
+        media=_media(media_att),
         cover_url=f"{get_settings().api_prefix}/links/{row.id}/cover" if row.cover_key else None,
         fetched_at=row.fetched_at,
     )
@@ -237,7 +283,12 @@ def out(row: LinkSnapshot) -> LinkOut:
 async def detail(db: AsyncSession, owner_id: uuid.UUID, link_id: uuid.UUID) -> LinkDetail:
     row = await _get(db, owner_id, link_id)
     comments = [_comment(c, row.site_name) for c in row.comments or [] if isinstance(c, dict)]
-    return LinkDetail(**out(row).model_dump(), text=row.content_text or "", comments=comments)
+    att = (
+        (await _media_of(db, [row])).get(row.media_attachment_id)
+        if row.media_attachment_id
+        else None
+    )
+    return LinkDetail(**out(row, att).model_dump(), text=row.content_text or "", comments=comments)
 
 
 async def by_thought(
@@ -245,16 +296,20 @@ async def by_thought(
 ) -> dict[uuid.UUID, list[LinkOut]]:
     if not thought_ids:
         return {}
-    rows = (
-        await db.execute(
-            select(LinkSnapshot)
-            .where(LinkSnapshot.thought_id.in_(list(thought_ids)))
-            .order_by(LinkSnapshot.position)
-        )
-    ).scalars()
+    rows = list(
+        (
+            await db.execute(
+                select(LinkSnapshot)
+                .where(LinkSnapshot.thought_id.in_(list(thought_ids)))
+                .order_by(LinkSnapshot.position)
+            )
+        ).scalars()
+    )
+    atts = await _media_of(db, rows)
     result: dict[uuid.UUID, list[LinkOut]] = {}
     for row in rows:
-        result.setdefault(row.thought_id, []).append(out(row))
+        att = atts.get(row.media_attachment_id) if row.media_attachment_id else None
+        result.setdefault(row.thought_id, []).append(out(row, att))
     return result
 
 
@@ -405,6 +460,7 @@ def _apply(row: LinkSnapshot, page: pages.Page) -> None:
     row.excerpt = page.excerpt
     row.content_text = page.text or None
     row.word_count = len(page.text.split()) if page.text else None
+    row.duration_seconds = page.duration_seconds
     row.status = LinkStatus.ready.value
     row.error_code = None
     row.synced_at = now
@@ -456,10 +512,12 @@ async def run(db: AsyncSession, link_id: uuid.UUID) -> dict[str, Any]:
     _apply(row, page)
     row.cover_key = cover or row.cover_key
     row.fetched_at = utcnow()
+    await _queue_media(db, row, retry_failed=True)
     from app.modules.pikirler.services.thoughts import refresh_search_documents
 
     await refresh_search_documents(db, owner_id, [thought_id])
     await db.commit()
+    await jobs.kick(db)
     log.info("link_saved", extra={"words": row.word_count or 0})
     return {"status": "ready", "words": row.word_count or 0}
 
@@ -495,10 +553,12 @@ async def sync_with_site(db: AsyncSession, link_id: uuid.UUID) -> dict[str, Any]
         return {"skipped": "changed"}
     _apply(row, page)
     row.cover_key = cover or row.cover_key
+    await _queue_media(db, row, retry_failed=False)
     from app.modules.pikirler.services.thoughts import refresh_search_documents
 
     await refresh_search_documents(db, owner_id, [thought_id])
     await db.commit()
+    await jobs.kick(db)
     log.info("link_synced", extra={"count": row.comment_count or 0})
     return {"status": "synced", "comments": row.comment_count, "deleted": row.deleted_comment_count}
 
@@ -514,11 +574,12 @@ def sync_interval(age: timedelta) -> timedelta:
     return timedelta(days=7)
 
 
-# Sites whose copies are checked in the background (X: only whether it still exists).
+# Sites whose copies are checked in the background. Teswirler (and YouTube with an
+# API key) also bring new and deleted comments; the others: edits and deletion.
 SYNCABLE = (
     LinkSnapshot.url.ilike("https://teswirler.com/%")
     | LinkSnapshot.url.ilike("https://www.teswirler.com/%")
-    | (LinkSnapshot.site_name == "X")
+    | LinkSnapshot.site_name.in_(["X", "YouTube", "TikTok", "Instagram"])
 )
 
 
@@ -583,6 +644,120 @@ async def sync_job(db: AsyncSession, payload: dict[str, Any]) -> dict[str, Any]:
 
 async def gave_up(db: AsyncSession, payload: dict[str, Any], error: str) -> None:
     await _fail(db, uuid.UUID(payload["link_id"]), web.Unreachable.code)
+
+
+# --- the video itself (YouTube, TikTok, Instagram) -------------------------------------
+
+
+async def _queue_media(db: AsyncSession, row: LinkSnapshot, *, retry_failed: bool) -> None:
+    if row.site_name not in MEDIA_SITES or get_settings().link_media_max_mb <= 0:
+        return
+    if row.media_attachment_id is not None or row.media_status == "pending":
+        return
+    if row.media_status == "failed" and not retry_failed:
+        return
+    row.media_status = "pending"
+    row.media_error = None
+    await jobs.enqueue(
+        db,
+        MEDIA_JOB,
+        {"link_id": str(row.id)},
+        owner_id=row.owner_id,
+        dedupe_key=f"link-media:{row.id}",
+        max_attempts=2,
+    )
+
+
+async def _media_failed(db: AsyncSession, link_id: uuid.UUID, code: str) -> dict[str, Any]:
+    row = await db.get(LinkSnapshot, link_id, with_for_update=True)
+    if row is not None and row.media_status == "pending":
+        row.media_status = "failed"
+        row.media_error = code[:64]
+        await db.commit()
+    log.info("link_media_failed", extra={"error_code": code})
+    return {"status": "failed", "error_code": code}
+
+
+def _sha256(path: str) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+async def download_media(db: AsyncSession, link_id: uuid.UUID) -> dict[str, Any]:
+    row = await db.get(LinkSnapshot, link_id)
+    if row is None or row.media_status != "pending":
+        return {"skipped": "not pending"}
+    url, owner_id = row.final_url or row.url, row.owner_id
+    await db.commit()
+
+    attachment_id = uuid.uuid4()
+    key = media.storage_key(owner_id, attachment_id, "original")
+    with tempfile.TemporaryDirectory(prefix="pikirler-media-") as workdir:
+        try:
+            got = await asyncio.to_thread(media_download.download, url, workdir)
+        except media_download.MediaError as exc:
+            return await _media_failed(db, link_id, exc.code)
+        kind = media.ALLOWED.get(got.mime_type)
+        size = os.path.getsize(got.path)
+        if kind is not AttachmentKind.video:
+            return await _media_failed(db, link_id, "media_failed")
+        if size > media.max_bytes_for(kind):
+            return await _media_failed(db, link_id, "media_too_large")
+        checksum = await asyncio.to_thread(_sha256, got.path)
+        fh = await asyncio.to_thread(open, got.path, "rb")
+        try:
+            await get_storage().put_file(key, fh, got.mime_type)
+        finally:
+            fh.close()
+
+    row = await db.get(LinkSnapshot, link_id, with_for_update=True)
+    if row is None or row.media_status != "pending":  # removed meanwhile
+        await get_storage().delete(key)
+        return {"skipped": "gone"}
+    now = utcnow()
+    db.add(
+        Attachment(
+            id=attachment_id,
+            owner_id=owner_id,
+            storage_key=key,
+            original_filename=got.filename[:255],
+            safe_filename=media.safe_filename(got.filename),
+            mime_type=got.mime_type,
+            declared_mime_type=got.mime_type,
+            kind=AttachmentKind.video.value,
+            file_size=size,
+            checksum=checksum,
+            processing_status=ProcessingStatus.uploaded.value,
+            uploaded_at=now,
+        )
+    )
+    await db.flush()
+    row.media_attachment_id = attachment_id
+    row.media_status = "ready"
+    row.media_error = None
+    # Thumbnail, duration and dimensions, like any uploaded video.
+    await jobs.enqueue(
+        db,
+        media.PROCESS_JOB,
+        {"attachment_id": str(attachment_id)},
+        owner_id=owner_id,
+        dedupe_key=f"process:{attachment_id}",
+    )
+    await db.commit()
+    await jobs.kick(db)
+    log.info("link_media_saved", extra={"bytes": size})
+    return {"status": "ready", "bytes": size}
+
+
+async def media_job(db: AsyncSession, payload: dict[str, Any]) -> dict[str, Any]:
+    return await download_media(db, uuid.UUID(payload["link_id"]))
+
+
+async def media_gave_up(db: AsyncSession, payload: dict[str, Any], error: str) -> None:
+    await _media_failed(db, uuid.UUID(payload["link_id"]), "media_failed")
 
 
 async def delete_covers_job(db: AsyncSession, payload: dict[str, Any]) -> dict[str, Any]:

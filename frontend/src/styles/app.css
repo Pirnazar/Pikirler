@@ -550,3 +550,15 @@ mark { background: var(--color-accent-200); color: inherit; }
 .pk-comment.deleted > .pk-comment-text, .pk-comment.deleted > .pk-comment-quote { color: var(--color-neutral-600); text-decoration: line-through; text-decoration-thickness: 1px; text-decoration-color: color-mix(in srgb, var(--color-danger) 60%, transparent); }
 .pk-comment.deleted > .pk-comment-head strong { color: var(--color-neutral-600); }
 .pk-comment-image { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 700; color: var(--color-accent); }
+
+/* Saved videos (YouTube, TikTok): played from Pikirler's own storage */
+.pk-video-card { border: 1px solid var(--color-divider); padding: 12px 14px; display: grid; gap: 8px; }
+.pk-video-title { all: unset; cursor: pointer; font-family: var(--font-heading); font-weight: 800; font-size: 16px; line-height: 1.25; }
+.pk-video-title:hover, .pk-video-title:focus-visible { color: var(--color-accent); text-decoration: underline; }
+.pk-video-poster { all: unset; cursor: pointer; display: block; }
+.pk-video-poster img { width: 100%; max-height: 360px; object-fit: cover; display: block; }
+.pk-link-video { width: 100%; max-height: 420px; background: #000; display: block; }
+.pk-link-video.large { max-height: 70vh; margin-bottom: 18px; }
+.pk-quote .pk-link-video { max-height: 520px; }
+.pk-media-state { font-size: 12px; color: var(--color-neutral-600); }
+.pk-media-state.failed { color: var(--color-danger); }

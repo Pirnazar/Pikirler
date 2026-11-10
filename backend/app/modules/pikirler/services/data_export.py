@@ -99,10 +99,14 @@ async def build_export(db: AsyncSession, owner_id: uuid.UUID) -> dict[str, Any]:
                 "final_url": snap.final_url,
                 "site_name": snap.site_name,
                 "title": snap.title,
+                "kind": snap.kind,
                 "author": snap.author,
+                "author_username": snap.author_username,
                 "published_at": _iso(snap.published_at),
+                "edited_at": _iso(snap.edited_at),
                 "fetched_at": _iso(snap.fetched_at),
                 "text": snap.content_text,
+                "comments": snap.comments or [],
             }
         )
     att_links: dict[uuid.UUID, list[ThoughtAttachment]] = {}
@@ -254,13 +258,37 @@ def thought_markdown(t: dict[str, Any], tz_name: str) -> tuple[str, str]:
     lines += ["---", "", t["content"], ""]
     for page in t.get("saved_pages") or []:
         lines += ["", "---", "", f"## {page.get('title') or page['url']}", ""]
+        handle = f"@{page['author_username']}" if page.get("author_username") else None
         meta = [
-            x for x in (page.get("site_name"), page.get("author"), page.get("published_at")) if x
+            x
+            for x in (page.get("site_name"), page.get("author"), handle, page.get("published_at"))
+            if x
         ]
         if meta:
             lines += ["*" + " · ".join(meta) + "*", ""]
         lines += [f"<{page['url']}>", "", page.get("text") or "", ""]
+        if page.get("comments"):
+            lines += ["### Comments", ""]
+            lines += _markdown_comments(page["comments"], 0)
     return path, "\n".join(lines)
+
+
+def _markdown_comments(comments: list[Any], depth: int) -> list[str]:
+    lines: list[str] = []
+    pad = "  " * depth
+    for c in comments:
+        if not isinstance(c, dict):
+            continue
+        who = c.get("author") or c.get("username") or "?"
+        if c.get("username"):
+            who += f" (@{c['username']})"
+        when = f", {c['created_at']}" if c.get("created_at") else ""
+        text = " ".join((c.get("text") or "").split())
+        lines.append(f"{pad}- **{who}**{when}: {text}")
+        lines += _markdown_comments(c.get("replies") or [], depth + 1)
+    if depth == 0:
+        lines.append("")
+    return lines
 
 
 def markdown_zip(document: dict[str, Any], target: Any) -> None:

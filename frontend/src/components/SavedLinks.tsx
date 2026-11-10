@@ -9,6 +9,7 @@ import { I, Icon } from "../lib/icons";
 
 export type SavedLink = components["schemas"]["LinkOut"];
 type LinkDetail = components["schemas"]["LinkDetail"];
+type SavedComment = components["schemas"]["SavedComment"];
 
 const host = (url: string) => {
   try {
@@ -19,6 +20,7 @@ const host = (url: string) => {
 };
 
 const day = (iso?: string | null) => (iso ? short(iso) : "");
+
 
 /** The thought's text without the bare links whose pages are shown as cards. */
 export function textWithoutSavedLinks(content: string, links: SavedLink[]): string {
@@ -86,7 +88,7 @@ export function linkError(t: I18n["t"], code?: string | null): string {
 /** Cards for the pages a thought links to: saved copy, saving, or failed. */
 export function SavedLinks({ thought, large }: { thought: Thought; large?: boolean }) {
   const app = useApp();
-  const { t } = useI18n();
+  const { t, tn } = useI18n();
   const links = thought.links ?? [];
   usePollWhilePending(thought);
   if (!links.length) return null;
@@ -104,17 +106,20 @@ export function SavedLinks({ thought, large }: { thought: Thought; large?: boole
   return (
     <div className={"pk-saved" + (large ? " large" : "")} onClick={(e) => e.stopPropagation()}>
       {links.map((l) =>
-        l.status === "ready" ? (
+        l.status === "ready" && l.kind === "post" ? (
+          <QuoteCard key={l.id} l={l} />
+        ) : l.status === "ready" ? (
           <button key={l.id} type="button" className="pk-saved-card" onClick={() => openReader(l.id)} aria-label={t("lk_read", { title: l.title ?? host(l.url) })}>
             <span className="pk-saved-body">
               <span className="pk-saved-site">
-                {[l.site_name || host(l.url), l.author, day(l.published_at)].filter(Boolean).join(" · ")}
+                {[l.site_name || host(l.url), byline(l), day(l.published_at)].filter(Boolean).join(" · ")}
               </span>
               <span className="pk-saved-title">{l.title || host(l.url)}</span>
               {l.excerpt && <span className="pk-saved-excerpt">{l.excerpt}</span>}
               <span className="pk-saved-foot">
                 <Icon d={I.bookmark} size="xs" /> {t("lk_saved")}
                 {l.reading_minutes ? " · " + t("lk_minutes", { n: l.reading_minutes }) : ""}
+                {l.comment_count ? " · " + tn("lk_comments", l.comment_count) : ""}
               </span>
             </span>
             {l.cover_url && <img className="pk-saved-cover" src={l.cover_url} alt="" loading="lazy" />}
@@ -142,6 +147,61 @@ export function SavedLinks({ thought, large }: { thought: Thought; large?: boole
         ),
       )}
     </div>
+  );
+}
+
+function byline(l: SavedLink): string {
+  if (!l.author) return l.author_username ? "@" + l.author_username : "";
+  return l.author_username && l.author_username !== l.author ? `${l.author} @${l.author_username}` : l.author;
+}
+
+/** A short post (a Teswirler pikir) quoted as it was written. */
+function QuoteCard({ l }: { l: SavedLink }) {
+  const { t, tn } = useI18n();
+  return (
+    <blockquote className="pk-quote" role="button" tabIndex={0} aria-label={t("lk_read", { title: l.author ?? host(l.url) })}
+      onClick={() => openReader(l.id)} onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), openReader(l.id))}>
+      <div className="pk-quote-head">
+        <span className="pk-quote-avatar" aria-hidden="true">{(l.author || l.author_username || "?").slice(0, 1).toUpperCase()}</span>
+        <span className="pk-quote-who">
+          <strong>{l.author || l.author_username}</strong>
+          {l.author_username && (
+            <a href={l.author_url ?? undefined} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>@{l.author_username}</a>
+          )}
+        </span>
+        <span className="pk-quote-site">{l.site_name || host(l.url)}</span>
+      </div>
+      <p className="pk-quote-text">{l.post_text}</p>
+      {l.cover_url && <img className="pk-quote-img" src={l.cover_url} alt="" loading="lazy" />}
+      <div className="pk-quote-foot">
+        {l.published_at && <time dateTime={l.published_at}>{full(l.published_at)}</time>}
+        {l.edited_at && <span>· {t("lk_edited")}</span>}
+        {l.comment_count ? <span>· {tn("lk_comments", l.comment_count)}</span> : null}
+        <span style={{ flex: 1 }} />
+        <a href={l.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{t("lk_open_original")} ↗</a>
+      </div>
+    </blockquote>
+  );
+}
+
+function Comments({ items, depth = 0 }: { items: SavedComment[]; depth?: number }) {
+  const { t } = useI18n();
+  return (
+    <ul className={"pk-comments" + (depth ? " replies" : "")}>
+      {items.map((c, i) => (
+        <li key={c.id ?? i} className="pk-comment">
+          <div className="pk-comment-head">
+            <strong>{c.author || c.username || "?"}</strong>
+            {c.username && <a href={c.author_url ?? undefined} target="_blank" rel="noopener noreferrer">@{c.username}</a>}
+            {c.created_at && <time dateTime={c.created_at}>{full(c.created_at)}</time>}
+            {c.likes ? <span className="pk-comment-likes" title={t("lk_likes")}>♥ {c.likes}</span> : null}
+          </div>
+          {c.quote && <blockquote className="pk-comment-quote">{c.quote}</blockquote>}
+          <p className="pk-comment-text">{c.text}</p>
+          {c.replies && c.replies.length > 0 && <Comments items={c.replies} depth={depth + 1} />}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -200,15 +260,30 @@ export function Reader() {
           {!page && !error && <div className="pk-loading-line">{t("looking")}</div>}
           {page && (
             <>
-              <h1 className="pk-reader-title">{page.title || host(page.url)}</h1>
-              <div className="pk-reader-meta">
-                {[page.author, day(page.published_at), page.reading_minutes ? t("lk_minutes", { n: page.reading_minutes }) : ""].filter(Boolean).join(" · ")}
+              {page.kind !== "post" && <h1 className="pk-reader-title">{page.title || host(page.url)}</h1>}
+              <div className={"pk-reader-meta" + (page.kind === "post" ? " post" : "")}>
+                {(page.author || page.author_username) && (
+                  <span className="pk-reader-author">
+                    <strong>{page.author || page.author_username}</strong>
+                    {page.author_username && <a href={page.author_url ?? undefined} target="_blank" rel="noopener noreferrer">@{page.author_username}</a>}
+                  </span>
+                )}
+                {page.published_at && <span>{t("lk_published", { date: full(page.published_at) })}</span>}
+                {page.edited_at && <span>{t("lk_edited_on", { date: full(page.edited_at) })}</span>}
+                {page.reading_minutes && page.kind !== "post" ? <span>{t("lk_minutes", { n: page.reading_minutes })}</span> : null}
               </div>
-              {page.cover_url && <img className="pk-reader-cover" src={page.cover_url} alt="" />}
+              {page.kind !== "post" && page.cover_url && <img className="pk-reader-cover" src={page.cover_url} alt="" />}
               {paragraphs.length ? (
-                <div className="pk-reader-text">{paragraphs.map((p, i) => <p key={i}>{p}</p>)}</div>
+                <div className={"pk-reader-text" + (page.kind === "post" ? " post" : "")}>{paragraphs.map((p, i) => <p key={i}>{p}</p>)}</div>
               ) : (
                 <p className="pk-muted">{page.excerpt || t("lk_no_text")}</p>
+              )}
+              {page.kind === "post" && page.cover_url && <img className="pk-reader-cover" src={page.cover_url} alt="" />}
+              {page.comment_count !== null && page.comment_count !== undefined && (
+                <section className="pk-reader-comments" aria-label={t("lk_comments_title")}>
+                  <h2>{t("lk_comments_title")} <span className="pk-muted">{page.comment_count}</span></h2>
+                  {page.comments?.length ? <Comments items={page.comments} /> : <p className="pk-muted">{t("lk_no_comments")}</p>}
+                </section>
               )}
               <div className="pk-reader-foot">
                 <span>{t("lk_saved_on", { date: page.fetched_at ? full(page.fetched_at) : "" })}</span>

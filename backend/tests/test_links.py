@@ -63,6 +63,37 @@ TESWIRLER_BLOG = {
     }
 }
 
+
+def _comment(cid: str, who: str, text: str, minute: int, replies: int = 0) -> dict:  # type: ignore[type-arg]
+    return {
+        "id": cid,
+        "content": text,
+        "quote": None,
+        "createdAt": f"2026-11-10T12:{minute:02d}:00.000Z",
+        "author": {"name": who.title(), "username": who},
+        "likesCount": minute % 5,
+        "repliesCount": replies,
+    }
+
+
+BLOG_COMMENTS = [  # newest first, as Teswirler sends them
+    _comment("c2", "aman", "Ajaýyp goşgy!", 30),
+    _comment("c1", "jeren", "Kimiň goşgusy?", 16, replies=1),
+]
+BLOG_REPLIES = {"c1": [_comment("r1", "ejegyzzz", "Meniňki, sag boluň", 19)]}
+TESWIRLER_PIKIR = {
+    "data": {
+        "id": "p1",
+        "content": "Bu gysga pikir.\nIkinji setir.",
+        "createdAt": "2026-11-10T14:58:53.689Z",
+        "updatedAt": "2026-11-10T15:02:45.081Z",
+        "author": {"name": "Didar", "username": "Didar"},
+        "images": [{"url": "https://cdn.example.org/p1.jpg", "type": "IMAGE"}],
+    }
+}
+# 60 comments on the pikir: two pages of 50 + 10.
+PIKIR_COMMENTS = [_comment(f"pc{i}", f"user{i}", f"Teswir {i}", i % 60) for i in range(60)]
+
 PUBLIC = {
     "news.example.org": "93.184.216.34",
     "cdn.example.org": "93.184.216.35",
@@ -94,6 +125,21 @@ class FakeWeb:
             return httpx.Response(200, content=png_bytes(), headers={"content-type": "image/png"})
         if host == "api.teswirler.com" and path == "/blogs/watan-nireden-baslanyar":
             return httpx.Response(200, json=TESWIRLER_BLOG)
+        if host == "api.teswirler.com" and path == "/blogs/f33b/comments":
+            return httpx.Response(200, json={"data": BLOG_COMMENTS})
+        if host == "api.teswirler.com" and path.startswith("/blogs/f33b/comments/"):
+            cid = path.split("/")[4]
+            return httpx.Response(
+                200, json={"data": {"items": BLOG_REPLIES.get(cid, []), "hasMore": False}}
+            )
+        if host == "api.teswirler.com" and path == "/pikirler/p1":
+            return httpx.Response(200, json=TESWIRLER_PIKIR)
+        if host == "api.teswirler.com" and path == "/pikirler/p1/comments":
+            skip, take = int(request.url.params["skip"]), int(request.url.params["take"])
+            assert take <= 50
+            chunk = PIKIR_COMMENTS[skip : skip + take]
+            more = skip + take < len(PIKIR_COMMENTS)
+            return httpx.Response(200, json={"data": {"items": chunk, "hasMore": more}})
         if host == "moved.example.org":
             return httpx.Response(302, headers={"location": "http://192.168.1.8/admin"})
         if host == "news.example.org" and path == "/file.zip":
@@ -205,6 +251,57 @@ async def test_teswirler_article_comes_from_its_api(
     )
     assert "https://api.teswirler.com/blogs/watan-nireden-baslanyar" in fake_web.calls
     assert not any(c.startswith("https://teswirler.com/") for c in fake_web.calls)
+
+    assert link["kind"] == "article"
+    assert link["author_username"] == "Ejegyzzz"
+    assert link["author_url"] == "https://teswirler.com/@Ejegyzzz"
+    assert link["published_at"] == "2026-11-10T12:07:55.725000Z"
+    assert link["comment_count"] == 3
+    # Oldest first, replies nested under their comment.
+    [first, second] = detail["comments"]
+    assert (first["author"], first["username"], first["text"]) == (
+        "Jeren",
+        "jeren",
+        "Kimiň goşgusy?",
+    )
+    assert first["created_at"] == "2026-11-10T12:16:00Z"
+    assert first["author_url"] == "https://teswirler.com/@jeren"
+    assert [r["text"] for r in first["replies"]] == ["Meniňki, sag boluň"]
+    assert second["text"] == "Ajaýyp goşgy!"
+    # Comments are searchable too.
+    found = (await client.get("/search", params={"q": "Ajaýyp"})).json()
+    assert [r["thought_id"] for r in found["results"]] == [created["id"]]
+
+
+async def test_teswirler_pikir_is_a_quote_with_all_comments(
+    client: httpx.AsyncClient, fake_web: FakeWeb
+) -> None:
+    url = "https://teswirler.com/pikirler/p1?utm_source=copy&utm_medium=social"
+    created = await new_thought(client, url)
+    await run_jobs()
+    link = await _link(client, created["id"])
+    assert link["status"] == "ready"
+    assert link["kind"] == "post"
+    assert link["author"] == "Didar"
+    assert link["author_username"] == "Didar"
+    assert link["post_text"] == "Bu gysga pikir.\nIkinji setir."
+    assert link["edited_at"] is not None
+    assert link["cover_url"]
+    assert link["comment_count"] == 60  # both pages were read
+    detail = (await client.get(f"/links/{link['id']}")).json()
+    assert len(detail["comments"]) == 60
+    assert detail["comments"][0]["text"] == "Teswir 0"
+
+
+async def test_comments_failing_keep_the_article(
+    client: httpx.AsyncClient, fake_web: FakeWeb
+) -> None:
+    fake_web.status["https://api.teswirler.com/blogs/f33b/comments?skip=0&take=50"] = 503
+    created = await new_thought(client, "https://teswirler.com/watan-nireden-baslanyar")
+    await run_jobs()
+    link = await _link(client, created["id"])
+    assert link["status"] == "ready"
+    assert link["comment_count"] is None
 
 
 @pytest.mark.parametrize(
@@ -334,3 +431,17 @@ async def test_export_includes_saved_pages(client: httpx.AsyncClient, fake_web: 
     [page] = doc["thoughts"][0]["saved_pages"]
     assert page["title"] == "Ýol barada"
     assert "zümerret" in page["text"]
+
+
+async def test_export_includes_comments(client: httpx.AsyncClient, fake_web: FakeWeb) -> None:
+    await new_thought(client, "https://teswirler.com/watan-nireden-baslanyar")
+    await run_jobs()
+    doc = json.loads((await client.get("/export/json")).content)
+    [page] = doc["thoughts"][0]["saved_pages"]
+    assert page["author_username"] == "Ejegyzzz"
+    assert [c["text"] for c in page["comments"]] == ["Kimiň goşgusy?", "Ajaýyp goşgy!"]
+    from app.modules.pikirler.services.data_export import thought_markdown
+
+    _, md = thought_markdown(doc["thoughts"][0], "UTC")
+    assert "- **Jeren (@jeren)**, 2026-11-10T12:16:00+00:00: Kimiň goşgusy?" in md
+    assert "  - **Ejegyzzz (@ejegyzzz)**" in md

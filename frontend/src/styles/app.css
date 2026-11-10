@@ -509,3 +509,34 @@ mark { background: var(--color-accent-200); color: inherit; }
 @media (max-width: 640px) {
   .pk-reader { width: 100%; max-height: 100%; height: 100%; border: 0; box-shadow: none; }
 }
+
+/* A saved short post, quoted */
+.pk-quote {
+  margin: 0; padding: 12px 14px 10px 16px; border: 1px solid var(--color-divider); border-left: 4px solid var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 5%, transparent); cursor: pointer; display: grid; gap: 8px;
+}
+.pk-quote:hover, .pk-quote:focus-visible { background: color-mix(in srgb, var(--color-accent) 10%, transparent); outline: none; }
+.pk-quote-head { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.pk-quote-avatar { width: 30px; height: 30px; flex: none; display: grid; place-items: center; background: var(--color-accent); color: var(--color-bg); font-weight: 800; font-size: 14px; }
+.pk-quote-who { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 6px; min-width: 0; flex: 1; font-size: 14px; }
+.pk-quote-who a, .pk-reader-author a, .pk-comment-head a { color: var(--color-neutral-600); font-weight: 600; text-decoration: none; }
+.pk-quote-who a:hover, .pk-reader-author a:hover, .pk-comment-head a:hover { color: var(--color-accent); text-decoration: underline; }
+.pk-quote-site { font-size: 11px; font-weight: 800; letter-spacing: 0.06em; text-transform: uppercase; color: var(--color-neutral-600); }
+.pk-quote-text { margin: 0; font-size: 15px; line-height: 1.55; white-space: pre-line; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 10; -webkit-box-orient: vertical; overflow: hidden; }
+.pk-quote-img { width: 100%; max-height: 320px; object-fit: cover; }
+.pk-quote-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: 12px; color: var(--color-neutral-600); }
+.pk-quote-foot a { color: var(--color-accent); font-weight: 700; }
+
+.pk-reader-meta { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
+.pk-reader-meta.post { font-size: 14px; margin-bottom: 14px; }
+.pk-reader-author { display: inline-flex; gap: 6px; align-items: baseline; color: var(--color-text); }
+.pk-reader-text.post { border-left: 4px solid var(--color-accent); padding-left: 16px; font-size: 18px; }
+.pk-reader-comments { margin-top: 28px; padding-top: 18px; border-top: 2px solid var(--color-text); }
+.pk-reader-comments h2 { font-family: var(--font-heading); font-size: 20px; margin: 0 0 12px; }
+.pk-comments { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.pk-comments.replies { margin-top: 10px; padding-left: 16px; border-left: 2px solid var(--color-divider); gap: 10px; }
+.pk-comment-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; font-size: 13px; }
+.pk-comment-head time { color: var(--color-neutral-600); font-size: 12px; }
+.pk-comment-likes { color: var(--color-neutral-600); font-size: 12px; }
+.pk-comment-text { margin: 4px 0 0; font-size: 15px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+.pk-comment-quote { margin: 6px 0 0; padding: 4px 10px; border-left: 3px solid var(--color-divider); font-size: 13px; color: var(--color-neutral-700); white-space: pre-line; }

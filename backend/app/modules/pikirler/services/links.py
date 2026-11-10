@@ -16,6 +16,7 @@ import re
 import uuid
 from collections.abc import Sequence
 from typing import Any
+from urllib.parse import quote
 
 from PIL import Image, ImageOps
 from sqlalchemy import delete, select
@@ -27,7 +28,7 @@ from app.core.exceptions import NotFound
 from app.modules.pikirler.integrations import pages, web
 from app.modules.pikirler.models import LinkSnapshot, Thought
 from app.modules.pikirler.models.enums import LinkStatus
-from app.modules.pikirler.schemas.links import LinkDetail, LinkOut
+from app.modules.pikirler.schemas.links import LinkDetail, LinkOut, SavedComment
 from app.modules.pikirler.services import jobs
 from app.storage import get_storage
 
@@ -163,6 +164,39 @@ def _reading_minutes(words: int | None) -> int | None:
     return max(1, round(words / 200)) if words else None
 
 
+POST_TEXT_CHARS = 1200
+
+
+def _profile_url(row_site: str | None, username: str | None) -> str | None:
+    if not username or row_site != "Teswirler":
+        return None
+    site = get_settings().teswirler_site_url.rstrip("/")
+    return f"{site}/@{quote(username, safe='')}"
+
+
+def _comment(raw: dict[str, Any], site: str | None) -> SavedComment:
+    return SavedComment(
+        id=raw.get("id"),
+        author=raw.get("author"),
+        username=raw.get("username"),
+        author_url=_profile_url(site, raw.get("username")),
+        text=raw.get("text") or "",
+        quote=raw.get("quote"),
+        created_at=raw.get("created_at"),
+        likes=raw.get("likes") or 0,
+        replies=[_comment(r, site) for r in raw.get("replies") or [] if isinstance(r, dict)],
+    )
+
+
+def _post_text(row: LinkSnapshot) -> str | None:
+    if row.kind != "post" or not row.content_text:
+        return None
+    text = row.content_text
+    if len(text) <= POST_TEXT_CHARS:
+        return text
+    return text[: POST_TEXT_CHARS - 1].rsplit(" ", 1)[0] + "…"
+
+
 def out(row: LinkSnapshot) -> LinkOut:
     return LinkOut(
         id=row.id,
@@ -170,10 +204,16 @@ def out(row: LinkSnapshot) -> LinkOut:
         final_url=row.final_url,
         status=LinkStatus(row.status),
         error_code=row.error_code,
+        kind="post" if row.kind == "post" else "article",
         site_name=row.site_name,
         title=row.title,
         author=row.author,
+        author_username=row.author_username,
+        author_url=_profile_url(row.site_name, row.author_username),
         published_at=row.published_at,
+        edited_at=row.edited_at,
+        comment_count=row.comment_count,
+        post_text=_post_text(row),
         excerpt=row.excerpt,
         has_text=bool(row.content_text),
         reading_minutes=_reading_minutes(row.word_count),
@@ -184,7 +224,8 @@ def out(row: LinkSnapshot) -> LinkOut:
 
 async def detail(db: AsyncSession, owner_id: uuid.UUID, link_id: uuid.UUID) -> LinkDetail:
     row = await _get(db, owner_id, link_id)
-    return LinkDetail(**out(row).model_dump(), text=row.content_text or "")
+    comments = [_comment(c, row.site_name) for c in row.comments or [] if isinstance(c, dict)]
+    return LinkDetail(**out(row).model_dump(), text=row.content_text or "", comments=comments)
 
 
 async def by_thought(
@@ -216,16 +257,28 @@ async def search_texts(db: AsyncSession, thought_ids: Sequence[uuid.UUID]) -> di
             LinkSnapshot.title,
             LinkSnapshot.author,
             LinkSnapshot.content_text,
+            LinkSnapshot.author_username,
+            LinkSnapshot.comments,
         ).where(
             LinkSnapshot.thought_id.in_(list(thought_ids)),
             LinkSnapshot.status == LinkStatus.ready.value,
         )
     )
     texts: dict[uuid.UUID, list[str]] = {}
-    for tid, site, title, author, text in rows.all():
-        parts = [p for p in (site, title, author, (text or "")[:SEARCH_TEXT_CHARS]) if p]
-        texts.setdefault(tid, []).append("\n".join(parts))
+    for tid, site, title, author, text, username, comments in rows.all():
+        said = "\n".join(_comment_lines(comments or []))[:SEARCH_TEXT_CHARS]
+        parts = [site, title, author, username, (text or "")[:SEARCH_TEXT_CHARS], said]
+        texts.setdefault(tid, []).append("\n".join(p for p in parts if p))
     return {tid: "\n".join(v) for tid, v in texts.items()}
+
+
+def _comment_lines(comments: list[Any]) -> list[str]:
+    lines: list[str] = []
+    for c in comments:
+        if isinstance(c, dict):
+            lines.append(" ".join(str(c.get(k) or "") for k in ("author", "username", "text")))
+            lines.extend(_comment_lines(c.get("replies") or []))
+    return lines
 
 
 async def cover_bytes(db: AsyncSession, owner_id: uuid.UUID, link_id: uuid.UUID) -> bytes:
@@ -290,10 +343,17 @@ async def run(db: AsyncSession, link_id: uuid.UUID) -> dict[str, Any]:
         return {"skipped": "gone"}
     old_cover = row.cover_key
     row.final_url = page.final_url if page.final_url != url else None
+    row.kind = page.kind
     row.site_name = page.site_name
     row.title = page.title
     row.author = page.author
+    row.author_username = page.author_username
     row.published_at = page.published_at
+    row.edited_at = page.edited_at
+    if page.comments is not None or row.comments is None:
+        # A failed comment download keeps the comments saved earlier.
+        row.comments = page.comments
+        row.comment_count = page.comment_count
     row.excerpt = page.excerpt
     row.content_text = page.text or None
     row.word_count = len(page.text.split()) if page.text else None

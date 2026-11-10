@@ -8929,6 +8929,16 @@
             ],
             "title": "Error Code"
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "article",
+              "post"
+            ],
+            "title": "Kind",
+            "description": "post: a short post (Teswirler pikir), shown as a quote",
+            "default": "article"
+          },
           "site_name": {
             "anyOf": [
               {
@@ -8962,6 +8972,28 @@
             ],
             "title": "Author"
           },
+          "author_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Username"
+          },
+          "author_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Url"
+          },
           "published_at": {
             "anyOf": [
               {
@@ -8973,6 +9005,42 @@
               }
             ],
             "title": "Published At"
+          },
+          "edited_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited At"
+          },
+          "comment_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment Count",
+            "description": "Saved comments incl. replies; null when the site has none"
+          },
+          "post_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post Text",
+            "description": "Full text of a short post"
           },
           "excerpt": {
             "anyOf": [
@@ -9028,6 +9096,13 @@
             "type": "string",
             "title": "Text",
             "default": ""
+          },
+          "comments": {
+            "items": {
+              "$ref": "#/components/schemas/SavedComment"
+            },
+            "type": "array",
+            "title": "Comments"
           }
         },
         "type": "object",
@@ -9074,6 +9149,16 @@
             ],
             "title": "Error Code"
           },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "article",
+              "post"
+            ],
+            "title": "Kind",
+            "description": "post: a short post (Teswirler pikir), shown as a quote",
+            "default": "article"
+          },
           "site_name": {
             "anyOf": [
               {
@@ -9107,6 +9192,28 @@
             ],
             "title": "Author"
           },
+          "author_username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Username"
+          },
+          "author_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Url"
+          },
           "published_at": {
             "anyOf": [
               {
@@ -9118,6 +9225,42 @@
               }
             ],
             "title": "Published At"
+          },
+          "edited_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Edited At"
+          },
+          "comment_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment Count",
+            "description": "Saved comments incl. replies; null when the site has none"
+          },
+          "post_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Post Text",
+            "description": "Full text of a short post"
           },
           "excerpt": {
             "anyOf": [
@@ -10220,6 +10363,98 @@
         },
         "type": "object",
         "title": "RevisionRestore"
+      },
+      "SavedComment": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "author": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "author_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Author Url"
+          },
+          "text": {
+            "type": "string",
+            "title": "Text"
+          },
+          "quote": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Quote"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "likes": {
+            "type": "integer",
+            "title": "Likes",
+            "default": 0
+          },
+          "replies": {
+            "items": {
+              "$ref": "#/components/schemas/SavedComment"
+            },
+            "type": "array",
+            "title": "Replies"
+          }
+        },
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "title": "SavedComment"
       },
       "SearchFilters": {
         "properties": {

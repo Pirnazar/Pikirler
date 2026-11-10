@@ -46,6 +46,8 @@ class LinkOut(Schema):
         default=None, description="Comments incl. replies still on the site; null when none kept"
     )
     deleted_comment_count: int = Field(default=0, description="Kept comments deleted on the site")
+    new_comment_count: int = Field(default=0, description="Comments the owner has not seen yet")
+    has_summary: bool = False
     synced_at: datetime | None = Field(default=None, description="Last check against the original")
     source_deleted_at: datetime | None = Field(
         default=None, description="When the original was found deleted; the copy is kept"
@@ -77,9 +79,40 @@ class SavedComment(Schema):
     deleted_at: datetime | None = Field(
         default=None, description="Set when the comment disappeared from the site"
     )
+    is_new: bool = Field(default=False, description="Appeared since the owner last looked")
     replies: list[SavedComment] = Field(default_factory=list)
+
+
+class LinkSummary(Schema):
+    gist: str
+    points: list[str] = Field(default_factory=list)
+    language: str | None = None
+    created_at: datetime | None = None
 
 
 class LinkDetail(LinkOut):
     text: str = ""
     comments: list[SavedComment] = Field(default_factory=list)
+    summary: LinkSummary | None = None
+
+
+class MediaAttempt(Schema):
+    site: str | None = None
+    ok: bool
+    error: str | None = None
+    at: datetime
+
+
+class MediaHealth(Schema):
+    enabled: bool
+    ytdlp_version: str | None = None
+    refreshed: str | None = Field(default=None, description="When yt-dlp was last refreshed")
+    recent: list[MediaAttempt] = Field(default_factory=list)
+    broken: bool = Field(
+        description="Recent downloads keep failing: yt-dlp probably needs an update"
+    )
+
+
+class SummaryRequest(Schema):
+    language: Literal["tk", "ru", "en"] = "ru"
+    refresh: bool = Field(default=False, description="Make a new one even if one exists")

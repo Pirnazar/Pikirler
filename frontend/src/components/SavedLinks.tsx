@@ -10,6 +10,7 @@ import { I, Icon } from "../lib/icons";
 export type SavedLink = components["schemas"]["LinkOut"];
 type LinkDetail = components["schemas"]["LinkDetail"];
 type SavedComment = components["schemas"]["SavedComment"];
+type LinkSummary = components["schemas"]["LinkSummary"];
 
 const host = (url: string) => {
   try {
@@ -32,6 +33,34 @@ export function textWithoutSavedLinks(content: string, links: SavedLink[]): stri
     if (text.trimEnd().endsWith(l.url)) text = text.trimEnd().slice(0, -l.url.length);
   }
   return text.replace(/\n{3,}/g, "\n\n").trim();
+}
+
+// --- comments read: every card showing that copy drops its "new" badge ------------------
+
+const seenListeners = new Set<(id: string) => void>();
+
+function announceSeen(id: string) {
+  seenListeners.forEach((fn) => fn(id));
+}
+
+function useSeen(thought: Thought) {
+  useEffect(() => {
+    const fn = (id: string) => {
+      const links = thought.links ?? [];
+      if (links.some((l) => l.id === id && l.new_comment_count)) {
+        emit({ type: "updated", thought: { ...thought, links: links.map((l) => (l.id === id ? { ...l, new_comment_count: 0 } : l)) } });
+      }
+    };
+    seenListeners.add(fn);
+    return () => {
+      seenListeners.delete(fn);
+    };
+  }, [thought]);
+}
+
+function NewBadge({ n }: { n?: number | null }) {
+  const { tn } = useI18n();
+  return n ? <span className="pk-new-badge">● {tn("lk_new_comments", n)}</span> : null;
 }
 
 // --- one reader for the whole app ---------------------------------------------------
@@ -93,6 +122,7 @@ export function SavedLinks({ thought, large }: { thought: Thought; large?: boole
   const { t, tn } = useI18n();
   const links = thought.links ?? [];
   usePollWhilePending(thought);
+  useSeen(thought);
   if (!links.length) return null;
 
   async function retry(e: React.MouseEvent, l: SavedLink) {
@@ -126,6 +156,7 @@ export function SavedLinks({ thought, large }: { thought: Thought; large?: boole
                 {l.comment_count ? " · " + tn("lk_comments", l.comment_count) : ""}
                 {l.deleted_comment_count ? " · " + tn("lk_comments_deleted", l.deleted_comment_count) : ""}
               </span>
+              <NewBadge n={l.new_comment_count} />
               {l.source_deleted_at && <span className="pk-gone-badge">{t("lk_source_gone")}</span>}
             </span>
             {l.cover_url && <img className="pk-saved-cover" src={l.cover_url} alt="" loading="lazy" />}
@@ -185,6 +216,7 @@ function QuoteCard({ l }: { l: SavedLink }) {
         {l.edited_at && <span>· {t("lk_edited")}</span>}
         {l.comment_count ? <span>· {tn("lk_comments", l.comment_count)}</span> : null}
         {l.deleted_comment_count ? <span>· {tn("lk_comments_deleted", l.deleted_comment_count)}</span> : null}
+        <NewBadge n={l.new_comment_count} />
         {l.source_deleted_at && <span className="pk-gone-badge">{t("lk_source_gone")}</span>}
         <span style={{ flex: 1 }} />
         <a href={l.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{t("lk_open_original")} ↗</a>
@@ -264,12 +296,13 @@ function Comments({ items, depth = 0 }: { items: SavedComment[]; depth?: number 
   return (
     <ul className={"pk-comments" + (depth ? " replies" : "")}>
       {items.map((c, i) => (
-        <li key={c.id ?? i} className={"pk-comment" + (c.deleted_at ? " deleted" : "")}>
+        <li key={c.id ?? i} className={"pk-comment" + (c.deleted_at ? " deleted" : "") + (c.is_new ? " new" : "")}>
           <div className="pk-comment-head">
             <strong>{c.author || c.username || "?"}</strong>
             {c.username && <a href={c.author_url ?? undefined} target="_blank" rel="noopener noreferrer">@{c.username}</a>}
             {c.created_at && <time dateTime={c.created_at}>{full(c.created_at)}</time>}
             {c.likes ? <span className="pk-comment-likes" title={t("lk_likes")}>♥ {c.likes}</span> : null}
+            {c.is_new && <span className="pk-new-badge">● {t("lk_new")}</span>}
             {c.deleted_at && (
               <span className="pk-gone-badge" title={full(c.deleted_at)}>{t("lk_comment_gone", { date: short(c.deleted_at) })}</span>
             )}
@@ -281,6 +314,64 @@ function Comments({ items, depth = 0 }: { items: SavedComment[]; depth?: number 
         </li>
       ))}
     </ul>
+  );
+}
+
+/** A short AI summary, made on request and kept with the copy. */
+function Summary({ page }: { page: LinkDetail }) {
+  const app = useApp();
+  const { t, lang } = useI18n();
+  const [summary, setSummary] = useState<LinkSummary | null>(page.summary ?? null);
+  const [busy, setBusy] = useState(false);
+  const [open, setOpen] = useState(!!page.summary);
+  useEffect(() => {
+    setSummary(page.summary ?? null);
+    setOpen(!!page.summary);
+  }, [page]);
+  const worth = (page.text?.length ?? 0) > 400 || !!page.duration_seconds;
+  if (!app.aiAvailable || (!worth && !summary)) return null;
+
+  async function make(refresh = false) {
+    setBusy(true);
+    setOpen(true);
+    try {
+      setSummary(await post<LinkSummary>(`/links/${page.id}/summary`, { language: lang, refresh }));
+    } catch (e) {
+      app.toast(errorMessage(e));
+      if (!summary) setOpen(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!open) {
+    return (
+      <button className="btn btn-secondary pk-summary-btn" onClick={() => make()}>
+        <Icon d={I.spark} size="sm" /> {t("lk_summary")}
+      </button>
+    );
+  }
+  return (
+    <section className="pk-summary" aria-label={t("lk_summary")} aria-busy={busy}>
+      <div className="pk-summary-head">
+        <Icon d={I.spark} size="sm" /> <strong>{t("lk_summary")}</strong>
+        <span style={{ flex: 1 }} />
+        {summary && !busy && (summary.language !== lang ? (
+          <button className="pk-link-btn" onClick={() => make()}>{t("lk_summary_in_lang")}</button>
+        ) : (
+          <button className="pk-link-btn" onClick={() => make(true)}>{t("lk_summary_again")}</button>
+        ))}
+      </div>
+      {busy ? (
+        <p className="pk-muted">{t("lk_summary_making")}</p>
+      ) : summary ? (
+        <>
+          {summary.gist && <p className="pk-summary-gist">{summary.gist}</p>}
+          {summary.points && summary.points.length > 0 && <ul>{summary.points.map((x, i) => <li key={i}>{x}</li>)}</ul>}
+          <p className="pk-summary-note">{t("lk_summary_note")}</p>
+        </>
+      ) : null}
+    </section>
   );
 }
 
@@ -303,7 +394,16 @@ export function Reader() {
     setPage(null);
     setError("");
     if (!id) return;
-    get<LinkDetail>(`/links/${id}`).then(setPage, (e) => setError(errorMessage(e)));
+    get<LinkDetail>(`/links/${id}`).then(
+      (p) => {
+        setPage(p);
+        if (p.new_comment_count) {
+          // Shown highlighted now; from the next opening on they are read.
+          post(`/links/${p.id}/seen`).then(() => announceSeen(p.id), () => undefined);
+        }
+      },
+      (e) => setError(errorMessage(e)),
+    );
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && openReader(null);
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -342,6 +442,7 @@ export function Reader() {
               {page.source_deleted_at && (
                 <div className="pk-gone-banner" role="note">{t("lk_source_gone_long", { date: full(page.source_deleted_at) })}</div>
               )}
+              <Summary page={page} />
               {page.kind !== "post" && <h1 className="pk-reader-title">{page.title || host(page.url)}</h1>}
               <div className={"pk-reader-meta" + (page.kind === "post" ? " post" : "")}>
                 {(page.author || page.author_username) && (

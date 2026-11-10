@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from "react";
-import { API_PREFIX, errorMessage, patch, put, type Settings } from "../api/client";
+import { useEffect, useState, type FormEvent } from "react";
+import { API_PREFIX, errorMessage, get, patch, put, type Settings } from "../api/client";
+import type { components } from "../api/schema";
 import { useApp } from "../app/context";
 import { Header } from "../components/Header";
 import { LangSwitch } from "../components/LangSwitch";
@@ -93,6 +94,8 @@ export function SettingsView() {
         <MagicWord enabled={!!s?.magic_word_enabled} />
 
         <Sharing />
+
+        <VideoDownloads />
 
         <div>
           <div className="pk-section-label" style={{ marginBottom: 6 }}>{t("keyboard")}</div>
@@ -260,6 +263,48 @@ function Sharing() {
           </form>
         )}
       </div>
+    </div>
+  );
+}
+
+type MediaHealth = components["schemas"]["MediaHealth"];
+
+/** Is the video downloader (yt-dlp) still working? It breaks when YouTube or
+ *  TikTok change their sites; the server refreshes it weekly. */
+function VideoDownloads() {
+  const { t } = useI18n();
+  const [health, setHealth] = useState<MediaHealth | null>(null);
+  useEffect(() => {
+    get<MediaHealth>("/links/media-health").then(setHealth, () => setHealth(null));
+  }, []);
+  if (!health) return null;
+  const recent = health.recent ?? [];
+  const refreshed = health.refreshed && health.refreshed !== "initial" ? health.refreshed.replace("T", " ").replace("Z", " UTC") : null;
+  return (
+    <div>
+      <div className="pk-section-label" style={{ marginBottom: 6 }}>{t("vd_title")}</div>
+      {!health.enabled ? (
+        <p style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>{t("vd_off")}</p>
+      ) : (
+        <>
+          {health.broken && <div className="pk-gone-banner" role="alert">{t("vd_broken")}</div>}
+          <p style={{ fontSize: 13, color: "var(--color-neutral-700)" }}>
+            {t("vd_desc")} {health.ytdlp_version && <>yt-dlp {health.ytdlp_version}{refreshed ? " · " + t("vd_refreshed", { date: refreshed }) : ""}.</>}
+          </p>
+          {recent.length > 0 ? (
+            <ul className="pk-vd-list">
+              {recent.map((r, i) => (
+                <li key={i} className={r.ok ? "ok" : "bad"}>
+                  <span aria-hidden="true">{r.ok ? "✓" : "✕"}</span> {r.site ?? "?"} · {new Date(r.at).toLocaleString()}
+                  {!r.ok && r.error ? <span className="pk-muted"> · {r.error}</span> : null}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="pk-muted" style={{ fontSize: 13 }}>{t("vd_none")}</p>
+          )}
+        </>
+      )}
     </div>
   );
 }

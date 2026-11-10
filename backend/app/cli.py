@@ -186,6 +186,30 @@ async def load_objects(args: argparse.Namespace) -> None:
     print(f"Imported {count} objects", file=sys.stderr)
 
 
+# A short, stable public video (the first YouTube upload, 19 seconds).
+CHECK_MEDIA_URL = "https://www.youtube.com/watch?v=jNQXAC9IVRw"
+
+
+async def check_media(args: argparse.Namespace) -> None:
+    """Download one short video into a temporary folder: exit 1 if the video
+    downloader is broken (used before switching to a rebuilt image)."""
+    import os
+    import tempfile
+
+    import yt_dlp
+
+    from app.modules.pikirler.integrations import media_download
+
+    print(f"yt-dlp {yt_dlp.version.__version__}")
+    with tempfile.TemporaryDirectory(prefix="pikirler-check-") as workdir:
+        try:
+            got = await asyncio.to_thread(media_download.download, args.url, workdir)
+        except media_download.MediaError as exc:
+            print(f"FAILED: {exc.code}: {exc}", file=sys.stderr)
+            sys.exit(1)
+        print(f"OK: {got.mime_type}, {os.path.getsize(got.path)} bytes")
+
+
 async def export_openapi(args: argparse.Namespace) -> None:
     from app.main import app
 
@@ -241,6 +265,10 @@ def main() -> None:
     sub.add_parser("init-storage").set_defaults(func=init_storage)
     sub.add_parser("dump-objects").set_defaults(func=dump_objects)
     sub.add_parser("load-objects").set_defaults(func=load_objects)
+
+    p = sub.add_parser("check-media", help="test the video downloader on a short video")
+    p.add_argument("--url", default=CHECK_MEDIA_URL)
+    p.set_defaults(func=check_media)
 
     p = sub.add_parser("export-openapi")
     p.add_argument("path")

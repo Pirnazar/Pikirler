@@ -1400,6 +1400,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pikirler/links/media-health": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Media Health
+         * @description Is the video downloader still working? (yt-dlp version, recent downloads)
+         */
+        get: operations["media_health_api_v1_pikirler_links_media_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pikirler/links/{link_id}": {
         parameters: {
             query?: never;
@@ -1451,6 +1471,47 @@ export interface paths {
         get: operations["link_cover_api_v1_pikirler_links__link_id__cover_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/links/{link_id}/seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark Seen
+         * @description The owner looked at the copy: its comments stop being "new".
+         */
+        post: operations["mark_seen_api_v1_pikirler_links__link_id__seen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/links/{link_id}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Summarize Link
+         * @description A short AI summary of the saved text (needs the AI to be set up and,
+         *     for an external provider, the owner's consent). Kept and reused.
+         */
+        post: operations["summarize_link_api_v1_pikirler_links__link_id__summary_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1898,6 +1959,17 @@ export interface components {
              */
             deleted_comment_count: number;
             /**
+             * New Comment Count
+             * @description Comments the owner has not seen yet
+             * @default 0
+             */
+            new_comment_count: number;
+            /**
+             * Has Summary
+             * @default false
+             */
+            has_summary: boolean;
+            /**
              * Synced At
              * @description Last check against the original
              */
@@ -1946,6 +2018,7 @@ export interface components {
             text: string;
             /** Comments */
             comments?: components["schemas"]["SavedComment"][];
+            summary?: components["schemas"]["LinkSummary"] | null;
         };
         /**
          * LinkMedia
@@ -2024,6 +2097,17 @@ export interface components {
              */
             deleted_comment_count: number;
             /**
+             * New Comment Count
+             * @description Comments the owner has not seen yet
+             * @default 0
+             */
+            new_comment_count: number;
+            /**
+             * Has Summary
+             * @default false
+             */
+            has_summary: boolean;
+            /**
              * Synced At
              * @description Last check against the original
              */
@@ -2071,6 +2155,17 @@ export interface components {
          * @enum {string}
          */
         LinkStatus: "pending" | "ready" | "failed";
+        /** LinkSummary */
+        LinkSummary: {
+            /** Gist */
+            gist: string;
+            /** Points */
+            points?: string[];
+            /** Language */
+            language?: string | null;
+            /** Created At */
+            created_at?: string | null;
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Email */
@@ -2092,6 +2187,39 @@ export interface components {
              * @description null removes the Magic Word
              */
             magic_word?: string | null;
+        };
+        /** MediaAttempt */
+        MediaAttempt: {
+            /** Site */
+            site?: string | null;
+            /** Ok */
+            ok: boolean;
+            /** Error */
+            error?: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+        };
+        /** MediaHealth */
+        MediaHealth: {
+            /** Enabled */
+            enabled: boolean;
+            /** Ytdlp Version */
+            ytdlp_version?: string | null;
+            /**
+             * Refreshed
+             * @description When yt-dlp was last refreshed
+             */
+            refreshed?: string | null;
+            /** Recent */
+            recent?: components["schemas"]["MediaAttempt"][];
+            /**
+             * Broken
+             * @description Recent downloads keep failing: yt-dlp probably needs an update
+             */
+            broken: boolean;
         };
         /** MediaOut */
         MediaOut: {
@@ -2513,6 +2641,12 @@ export interface components {
              * @description Set when the comment disappeared from the site
              */
             deleted_at?: string | null;
+            /**
+             * Is New
+             * @description Appeared since the owner last looked
+             * @default false
+             */
+            is_new: boolean;
             /** Replies */
             replies?: components["schemas"]["SavedComment"][];
         };
@@ -2688,6 +2822,21 @@ export interface components {
             thought_id: string;
             /** Summary */
             summary: string;
+        };
+        /** SummaryRequest */
+        SummaryRequest: {
+            /**
+             * Language
+             * @default ru
+             * @enum {string}
+             */
+            language: "tk" | "ru" | "en";
+            /**
+             * Refresh
+             * @description Make a new one even if one exists
+             * @default false
+             */
+            refresh: boolean;
         };
         /** SummaryResponse */
         SummaryResponse: {
@@ -9166,6 +9315,71 @@ export interface operations {
             };
         };
     };
+    media_health_api_v1_pikirler_links_media_health_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MediaHealth"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF failure or missing scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found (or owned by someone else) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Magic Word required */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     get_link_api_v1_pikirler_links__link_id__get: {
         parameters: {
             query?: never;
@@ -9318,6 +9532,144 @@ export interface operations {
                 };
                 content: {
                     "image/jpeg": unknown;
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF failure or missing scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found (or owned by someone else) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Magic Word required */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    mark_seen_api_v1_pikirler_links__link_id__seen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkOut"];
+                };
+            };
+            /** @description Not authenticated */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description CSRF failure or missing scope */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Not found (or owned by someone else) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Validation failed */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description Magic Word required */
+            423: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    summarize_link_api_v1_pikirler_links__link_id__summary_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                link_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["SummaryRequest"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LinkSummary"];
                 };
             };
             /** @description Not authenticated */

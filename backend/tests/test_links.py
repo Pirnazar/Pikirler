@@ -129,6 +129,7 @@ YT_PAGE = (
     + json.dumps(YT_PLAYER)
     + ";var meta = 1;</script></body></html>"
 )
+YT_IDS = {"dQw4w9WgXcQ"}
 YT_GONE = (
     "<html><body><script>var ytInitialPlayerResponse = "
     + json.dumps({"playabilityStatus": {"status": "ERROR", "reason": "Video unavailable"}})
@@ -213,7 +214,7 @@ class FakeWeb:
             return httpx.Response(404, json={"error": "not found"})
         if host == "www.youtube.com" and path == "/watch":
             vid = request.url.params["v"]
-            page = YT_PAGE if vid == "dQw4w9WgXcQ" else YT_GONE
+            page = YT_PAGE if vid in YT_IDS else YT_GONE
             return httpx.Response(200, text=page, headers={"content-type": "text/html"})
         if host == "www.tiktok.com" and path.startswith("/@halyci/video/"):
             return httpx.Response(200, text=TT_PAGE, headers={"content-type": "text/html"})
@@ -867,3 +868,153 @@ def test_download_options_accept_short_and_unknown_length_videos() -> None:
     assert keep({"duration": 19}) is None
     assert keep({"id": "x"}) is None
     assert keep({"duration": limit + 1}) is not None
+
+
+# --- one copy per page, new comments, summaries, downloader health -----------------------
+
+
+def test_canonical_urls() -> None:
+    from app.modules.pikirler.services.link_keys import canonical_url as key
+
+    assert key("https://youtu.be/dQw4w9WgXcQ?si=x") == key(
+        "https://m.youtube.com/watch?v=dQw4w9WgXcQ&feature=share"
+    )
+    assert key("https://twitter.com/old_name/status/20?s=20") == key("https://x.com/new/status/20")
+    assert key("https://www.teswirler.com/pikirler/p1?utm_source=copy") == (
+        "https://teswirler.com/pikirler/p1"
+    )
+    assert key("https://Example.org/a/?utm_medium=x&id=3#top") == "https://example.org/a?id=3"
+    assert key("https://example.org/a?id=3") != key("https://example.org/a?id=4")
+
+
+async def test_two_thoughts_share_one_copy(client: httpx.AsyncClient, fake_web: FakeWeb) -> None:
+    first = await new_thought(client, "https://teswirler.com/watan-nireden-baslanyar")
+    await run_jobs()
+    calls = len(fake_web.calls)
+    second = await new_thought(
+        client, "Ýene: https://www.teswirler.com/watan-nireden-baslanyar?utm_source=copy"
+    )
+    # Already saved: ready at once, nothing fetched again.
+    [link] = second["links"]
+    assert link["status"] == "ready"
+    assert link["url"] == "https://www.teswirler.com/watan-nireden-baslanyar?utm_source=copy"
+    await run_jobs()
+    assert len(fake_web.calls) == calls
+    assert link["id"] == (await _link(client, first["id"]))["id"]
+    async with get_database().sessionmaker() as db:
+        assert len(list((await db.execute(select(LinkSnapshot))).scalars())) == 1
+        key = (await db.execute(select(LinkSnapshot.cover_key))).scalar_one()
+
+    # Removing the link from one thought keeps the copy for the other.
+    await client.patch(f"/thoughts/{first['id']}", json={"content": "Başga", "expected_version": 1})
+    await run_jobs()
+    assert (await _link(client, second["id"]))["status"] == "ready"
+    assert await get_storage().head(key) is not None
+    # The search still finds the page through the thought that links to it.
+    found = (await client.get("/search", params={"q": "diridir"})).json()
+    assert [r["thought_id"] for r in found["results"]] == [second["id"]]
+
+    # When no thought links to it any more, the copy and its files go.
+    await client.patch(f"/thoughts/{second['id']}", json={"content": "Hiç", "expected_version": 1})
+    await run_jobs()
+    async with get_database().sessionmaker() as db:
+        assert list((await db.execute(select(LinkSnapshot))).scalars()) == []
+    assert await get_storage().head(key) is None
+
+
+async def test_new_comments_until_seen(
+    client: httpx.AsyncClient, fake_web: FakeWeb, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created = await new_thought(client, "https://teswirler.com/watan-nireden-baslanyar")
+    await run_jobs()
+    link = await _link(client, created["id"])
+    assert link["new_comment_count"] == 0  # the first download is not "new"
+
+    monkeypatch.setitem(
+        globals(), "BLOG_COMMENTS", [_comment("c9", "maral", "Täze teswir", 59), *BLOG_COMMENTS]
+    )
+    await _sync_now()
+    link = await _link(client, created["id"])
+    assert link["new_comment_count"] == 1
+    detail = (await client.get(f"/links/{link['id']}")).json()
+    assert [c["text"] for c in detail["comments"] if c["is_new"]] == ["Täze teswir"]
+
+    seen = await client.post(f"/links/{link['id']}/seen")
+    assert seen.status_code == 200
+    assert seen.json()["new_comment_count"] == 0
+    assert (await _link(client, created["id"]))["new_comment_count"] == 0
+
+
+async def test_summary_is_made_once_per_language(
+    client: httpx.AsyncClient, fake_web: FakeWeb
+) -> None:
+    from app.modules.pikirler.integrations import llm
+    from tests.fakes import FakeLLM
+
+    created = await new_thought(client, "https://news.example.org/yol")
+    await run_jobs()
+    link = await _link(client, created["id"])
+
+    fake = FakeLLM(
+        respond=lambda m: {"gist": "Ýol barada gysgaça.", "points": ["Daglar", "Deňiz", "Netije"]}
+    )
+    llm.set_llm_provider(fake)
+    first = await client.post(f"/links/{link['id']}/summary", json={"language": "tk"})
+    assert first.status_code == 200, first.text
+    assert first.json()["gist"] == "Ýol barada gysgaça."
+    assert first.json()["points"] == ["Daglar", "Deňiz", "Netije"]
+    assert len(fake.calls) == 1
+    # The page text went to the model as data, with the requested language.
+    sent = fake.calls[0]
+    assert "zümerret" in sent[1].content
+    assert "Turkmen" in sent[0].content
+
+    again = await client.post(f"/links/{link['id']}/summary", json={"language": "tk"})
+    assert again.json()["gist"] == "Ýol barada gysgaça."
+    assert len(fake.calls) == 1  # kept, not asked again
+    assert (await _link(client, created["id"]))["has_summary"] is True
+    await client.post(f"/links/{link['id']}/summary", json={"language": "ru"})
+    assert len(fake.calls) == 2  # another language: a new summary
+    detail = (await client.get(f"/links/{link['id']}")).json()
+    assert detail["summary"]["language"] == "ru"
+
+
+async def test_summary_needs_consent_for_external_ai(
+    client: httpx.AsyncClient, fake_web: FakeWeb
+) -> None:
+    from app.modules.pikirler.integrations import llm
+    from tests.fakes import FakeLLM
+
+    created = await new_thought(client, "https://news.example.org/yol")
+    await run_jobs()
+    link = await _link(client, created["id"])
+    fake = FakeLLM(respond=lambda m: {"gist": "x", "points": []}, is_external=True)
+    llm.set_llm_provider(fake)
+    resp = await client.post(f"/links/{link['id']}/summary", json={"language": "ru"})
+    assert resp.status_code == 403
+    assert fake.calls == []
+
+
+async def test_media_health_reports_a_broken_downloader(
+    client: httpx.AsyncClient, fake_web: FakeWeb
+) -> None:
+    from app.modules.pikirler.integrations import media_download
+
+    health = (await client.get("/links/media-health")).json()
+    assert health["broken"] is False
+    assert health["ytdlp_version"]
+
+    def broken(url: str, workdir: str) -> media_download.Downloaded:
+        raise media_download.MediaError("Unable to extract", code="media_failed")
+
+    media_download.set_downloader(broken)
+    try:
+        for video in ("dQw4w9WgXcQ", "aaaaaaaaaab", "aaaaaaaaaac"):
+            YT_IDS.add(video)
+            await new_thought(client, f"https://www.youtube.com/watch?v={video}")
+        await run_jobs()
+    finally:
+        media_download.set_downloader(None)
+    health = (await client.get("/links/media-health")).json()
+    assert health["broken"] is True
+    assert [r["ok"] for r in health["recent"]] == [False, False, False]

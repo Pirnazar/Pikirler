@@ -120,7 +120,9 @@ export function SavedLinks({ thought, large }: { thought: Thought; large?: boole
                 <Icon d={I.bookmark} size="xs" /> {t("lk_saved")}
                 {l.reading_minutes ? " · " + t("lk_minutes", { n: l.reading_minutes }) : ""}
                 {l.comment_count ? " · " + tn("lk_comments", l.comment_count) : ""}
+                {l.deleted_comment_count ? " · " + tn("lk_comments_deleted", l.deleted_comment_count) : ""}
               </span>
+              {l.source_deleted_at && <span className="pk-gone-badge">{t("lk_source_gone")}</span>}
             </span>
             {l.cover_url && <img className="pk-saved-cover" src={l.cover_url} alt="" loading="lazy" />}
           </button>
@@ -177,6 +179,8 @@ function QuoteCard({ l }: { l: SavedLink }) {
         {l.published_at && <time dateTime={l.published_at}>{full(l.published_at)}</time>}
         {l.edited_at && <span>· {t("lk_edited")}</span>}
         {l.comment_count ? <span>· {tn("lk_comments", l.comment_count)}</span> : null}
+        {l.deleted_comment_count ? <span>· {tn("lk_comments_deleted", l.deleted_comment_count)}</span> : null}
+        {l.source_deleted_at && <span className="pk-gone-badge">{t("lk_source_gone")}</span>}
         <span style={{ flex: 1 }} />
         <a href={l.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{t("lk_open_original")} ↗</a>
       </div>
@@ -189,15 +193,19 @@ function Comments({ items, depth = 0 }: { items: SavedComment[]; depth?: number 
   return (
     <ul className={"pk-comments" + (depth ? " replies" : "")}>
       {items.map((c, i) => (
-        <li key={c.id ?? i} className="pk-comment">
+        <li key={c.id ?? i} className={"pk-comment" + (c.deleted_at ? " deleted" : "")}>
           <div className="pk-comment-head">
             <strong>{c.author || c.username || "?"}</strong>
             {c.username && <a href={c.author_url ?? undefined} target="_blank" rel="noopener noreferrer">@{c.username}</a>}
             {c.created_at && <time dateTime={c.created_at}>{full(c.created_at)}</time>}
             {c.likes ? <span className="pk-comment-likes" title={t("lk_likes")}>♥ {c.likes}</span> : null}
+            {c.deleted_at && (
+              <span className="pk-gone-badge" title={full(c.deleted_at)}>{t("lk_comment_gone", { date: short(c.deleted_at) })}</span>
+            )}
           </div>
           {c.quote && <blockquote className="pk-comment-quote">{c.quote}</blockquote>}
           <p className="pk-comment-text">{c.text}</p>
+          {c.image_url && <a className="pk-comment-image" href={c.image_url} target="_blank" rel="noopener noreferrer">{t("lk_comment_image")} ↗</a>}
           {c.replies && c.replies.length > 0 && <Comments items={c.replies} depth={depth + 1} />}
         </li>
       ))}
@@ -208,7 +216,7 @@ function Comments({ items, depth = 0 }: { items: SavedComment[]; depth?: number 
 /** Reading view of a saved page, mounted once in the shell. */
 export function Reader() {
   const app = useApp();
-  const { t } = useI18n();
+  const { t, tn } = useI18n();
   const [id, setId] = useState(openId);
   const [page, setPage] = useState<LinkDetail | null>(null);
   const [error, setError] = useState("");
@@ -260,6 +268,9 @@ export function Reader() {
           {!page && !error && <div className="pk-loading-line">{t("looking")}</div>}
           {page && (
             <>
+              {page.source_deleted_at && (
+                <div className="pk-gone-banner" role="note">{t("lk_source_gone_long", { date: full(page.source_deleted_at) })}</div>
+              )}
               {page.kind !== "post" && <h1 className="pk-reader-title">{page.title || host(page.url)}</h1>}
               <div className={"pk-reader-meta" + (page.kind === "post" ? " post" : "")}>
                 {(page.author || page.author_username) && (
@@ -281,7 +292,11 @@ export function Reader() {
               {page.kind === "post" && page.cover_url && <img className="pk-reader-cover" src={page.cover_url} alt="" />}
               {page.comment_count !== null && page.comment_count !== undefined && (
                 <section className="pk-reader-comments" aria-label={t("lk_comments_title")}>
-                  <h2>{t("lk_comments_title")} <span className="pk-muted">{page.comment_count}</span></h2>
+                  <h2>
+                    {t("lk_comments_title")} <span className="pk-muted">{page.comment_count}</span>
+                    {page.deleted_comment_count ? <span className="pk-gone-count"> · {tn("lk_comments_deleted", page.deleted_comment_count)}</span> : null}
+                  </h2>
+                  {page.synced_at && <p className="pk-sync-note">{t("lk_synced", { date: full(page.synced_at) })}</p>}
                   {page.comments?.length ? <Comments items={page.comments} /> : <p className="pk-muted">{t("lk_no_comments")}</p>}
                 </section>
               )}

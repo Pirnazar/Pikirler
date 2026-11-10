@@ -124,6 +124,9 @@ class Settings(BaseSettings):
     link_max_page_bytes: int = 4 * 1024 * 1024
     link_max_image_bytes: int = 8 * 1024 * 1024
     link_max_per_thought: int = 5
+    # Keep saved Teswirler copies in step with the site (new comments, deleted
+    # ones marked, edits). Fresh posts are checked often, old ones rarely.
+    link_sync_enabled: bool = True
 
     # --- jobs ---------------------------------------------------------------
     job_max_attempts: int = 5

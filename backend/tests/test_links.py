@@ -94,6 +94,18 @@ TESWIRLER_PIKIR = {
 # 60 comments on the pikir: two pages of 50 + 10.
 PIKIR_COMMENTS = [_comment(f"pc{i}", f"user{i}", f"Teswir {i}", i % 60) for i in range(60)]
 
+X_OEMBED = {
+    "url": "https://x.com/aynamyrat/status/1855000000000000000",
+    "author_name": "Aýna Myradowa",
+    "author_url": "https://x.com/aynamyrat",
+    "html": '<blockquote class="twitter-tweet" data-dnt="true"><p lang="tk" dir="ltr">'
+    'Salam, dünýä!<br>Ikinji setir &amp; <a href="https://t.co/x">pic.x.com/x</a></p>'
+    "&mdash; Aýna Myradowa (@aynamyrat) "
+    '<a href="https://x.com/aynamyrat/status/1855000000000000000">November 8, 2024</a>'
+    "</blockquote>",
+    "provider_name": "X",
+}
+
 PUBLIC = {
     "news.example.org": "93.184.216.34",
     "cdn.example.org": "93.184.216.35",
@@ -101,6 +113,7 @@ PUBLIC = {
     "teswirler.com": "104.21.1.2",
     "sneaky.example.org": "10.0.0.5",
     "moved.example.org": "93.184.216.36",
+    "publish.x.com": "104.244.42.1",
 }
 
 
@@ -140,6 +153,11 @@ class FakeWeb:
             chunk = PIKIR_COMMENTS[skip : skip + take]
             more = skip + take < len(PIKIR_COMMENTS)
             return httpx.Response(200, json={"data": {"items": chunk, "hasMore": more}})
+        if host == "publish.x.com" and path == "/oembed":
+            target = request.url.params["url"]
+            if target == "https://x.com/aynamyrat/status/1855000000000000000":
+                return httpx.Response(200, json=X_OEMBED)
+            return httpx.Response(404, json={"error": "not found"})
         if host == "moved.example.org":
             return httpx.Response(302, headers={"location": "http://192.168.1.8/admin"})
         if host == "news.example.org" and path == "/file.zip":
@@ -445,3 +463,193 @@ async def test_export_includes_comments(client: httpx.AsyncClient, fake_web: Fak
     _, md = thought_markdown(doc["thoughts"][0], "UTC")
     assert "- **Jeren (@jeren)**, 2026-11-10T12:16:00+00:00: Kimiň goşgusy?" in md
     assert "  - **Ejegyzzz (@ejegyzzz)**" in md
+
+
+# --- keeping copies in step with the site -----------------------------------------
+
+
+async def _make_due() -> None:
+    """Pretend the last check was long ago, so the scheduler picks the copies."""
+    from datetime import timedelta
+
+    async with get_database().sessionmaker() as db:
+        await db.execute(update(LinkSnapshot).values(synced_at=utcnow() - timedelta(days=8)))
+        await db.commit()
+
+
+async def _sync_now() -> int:
+    from app.modules.pikirler.services import links
+
+    await _make_due()
+    async with get_database().sessionmaker() as db:
+        queued = await links.schedule_sync(db)
+    await run_jobs("sync_link")
+    return queued
+
+
+def _flat(comments: list) -> dict:  # type: ignore[type-arg]
+    out = {}
+    for c in comments:
+        out[c["text"]] = c["deleted_at"]
+        out.update(_flat(c["replies"]))
+    return out
+
+
+def test_merge_comments_marks_only_with_a_complete_list() -> None:
+    from app.modules.pikirler.services.links import count_comments, merge_comments
+
+    old = [
+        {
+            "id": "a",
+            "text": "A",
+            "created_at": "1",
+            "replies": [{"id": "a1", "text": "A1", "created_at": "2"}],
+        },
+        {"id": "b", "text": "B", "created_at": "3", "replies": []},
+    ]
+    new = [{"id": "a", "text": "A edited", "created_at": "1", "replies": []}]
+    partial = merge_comments(old, new, complete=False, when="T")
+    assert count_comments(partial) == (3, 0)
+    merged = merge_comments(old, new, complete=True, when="T")
+    assert [c["text"] for c in merged] == ["A edited", "B"]
+    assert merged[0]["replies"][0]["deleted_at"] == "T"
+    assert merged[1]["deleted_at"] == "T"
+    assert count_comments(merged) == (1, 2)
+    # Deleted comments keep the date they were first found missing.
+    again = merge_comments(merged, new, complete=True, when="LATER")
+    assert again[1]["deleted_at"] == "T"
+    # And come back to life if the site shows them again.
+    back = merge_comments(again, [*new, {"id": "b", "text": "B", "created_at": "3"}], True, "X")
+    assert back[1]["deleted_at"] is None
+
+
+async def test_sync_adds_new_comments_and_marks_deleted_ones(
+    client: httpx.AsyncClient, fake_web: FakeWeb, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created = await new_thought(client, "https://teswirler.com/watan-nireden-baslanyar")
+    await run_jobs()
+    assert (await _link(client, created["id"]))["comment_count"] == 3
+
+    # On the site: "Ajaýyp goşgy!" and the reply were deleted, a new thread came.
+    monkeypatch.setitem(
+        globals(),
+        "BLOG_COMMENTS",
+        [_comment("c3", "maral", "Täze teswir", 45, replies=1), BLOG_COMMENTS[1]],
+    )
+    monkeypatch.setitem(
+        globals(), "BLOG_REPLIES", {"c1": [], "c3": [_comment("r3", "aman", "Jogap", 50)]}
+    )
+    monkeypatch.setitem(globals()["BLOG_COMMENTS"][1], "repliesCount", 0)
+    assert await _sync_now() == 1
+
+    link = await _link(client, created["id"])
+    assert link["status"] == "ready"
+    assert link["comment_count"] == 3  # c1, c3 and its reply
+    assert link["deleted_comment_count"] == 2
+    assert link["synced_at"] is not None
+    detail = (await client.get(f"/links/{link['id']}")).json()
+    state = _flat(detail["comments"])
+    assert state["Kimiň goşgusy?"] is None
+    assert state["Täze teswir"] is None
+    assert state["Jogap"] is None
+    assert state["Ajaýyp goşgy!"] is not None  # kept, marked deleted
+    assert state["Meniňki, sag boluň"] is not None
+
+
+async def test_failed_sync_changes_nothing(client: httpx.AsyncClient, fake_web: FakeWeb) -> None:
+    created = await new_thought(client, "https://teswirler.com/watan-nireden-baslanyar")
+    await run_jobs()
+    fake_web.status["https://api.teswirler.com/blogs/f33b/comments/c1/replies?skip=0&take=50"] = 503
+    await _sync_now()
+    link = await _link(client, created["id"])
+    assert (link["comment_count"], link["deleted_comment_count"]) == (3, 0)
+
+
+async def test_deleted_original_keeps_the_copy(
+    client: httpx.AsyncClient, fake_web: FakeWeb
+) -> None:
+    api = "https://api.teswirler.com/blogs/watan-nireden-baslanyar"
+    created = await new_thought(client, "https://teswirler.com/watan-nireden-baslanyar")
+    await run_jobs()
+    fake_web.status[api] = 404
+    await _sync_now()
+    link = await _link(client, created["id"])
+    assert link["status"] == "ready"
+    assert link["source_deleted_at"] is not None
+    assert link["title"] == "Watan nireden başlanýar?!"
+    detail = (await client.get(f"/links/{link['id']}")).json()
+    assert "Türkmen watan" in detail["text"]
+
+    # Asking for a refresh does not throw the copy away either.
+    await client.post(f"/links/{link['id']}/refetch")
+    await run_jobs()
+    link = await _link(client, created["id"])
+    assert link["status"] == "ready"
+    assert link["source_deleted_at"] is not None
+
+    # The original is back: the mark goes away.
+    del fake_web.status[api]
+    await _sync_now()
+    assert (await _link(client, created["id"]))["source_deleted_at"] is None
+
+
+async def test_only_due_teswirler_copies_are_synced(
+    client: httpx.AsyncClient, fake_web: FakeWeb
+) -> None:
+    from app.modules.pikirler.services import links
+
+    await new_thought(client, "https://teswirler.com/watan-nireden-baslanyar")
+    await new_thought(client, "https://news.example.org/yol")  # not a site we sync
+    await run_jobs()
+    async with get_database().sessionmaker() as db:
+        assert await links.schedule_sync(db) == 0  # just saved: not due yet
+    assert await _sync_now() == 1  # only the Teswirler copy
+
+
+def test_x_status_links() -> None:
+    assert pages.x_status("https://x.com/jack/status/20") == ("jack", "20")
+    assert pages.x_status("https://twitter.com/jack/status/20?s=20&t=abc") == ("jack", "20")
+    assert pages.x_status("https://mobile.twitter.com/jack/status/20/photo/1") == ("jack", "20")
+    assert pages.x_status("https://x.com/jack") is None
+    assert pages.x_status("https://example.com/jack/status/20") is None
+
+
+async def test_x_post_is_saved_as_a_quote(client: httpx.AsyncClient, fake_web: FakeWeb) -> None:
+    created = await new_thought(
+        client, "https://twitter.com/aynamyrat/status/1855000000000000000?s=20"
+    )
+    await run_jobs()
+    link = await _link(client, created["id"])
+    assert link["status"] == "ready"
+    assert link["kind"] == "post"
+    assert link["site_name"] == "X"
+    assert link["author"] == "Aýna Myradowa"
+    assert link["author_username"] == "aynamyrat"
+    assert link["author_url"] == "https://x.com/aynamyrat"
+    assert link["post_text"] == "Salam, dünýä!\nIkinji setir & pic.x.com/x"
+    # The exact time comes from the post id, not the day-only date in the embed.
+    assert link["published_at"].startswith("2024-11-")
+    assert link["comment_count"] is None  # X does not give replies for free
+    # Only X's official embed endpoint was asked, never the x.com page.
+    assert all(c.startswith("https://publish.x.com/oembed?") for c in fake_web.calls)
+
+
+async def test_deleted_x_post_is_marked(client: httpx.AsyncClient, fake_web: FakeWeb) -> None:
+    created = await new_thought(client, "https://x.com/aynamyrat/status/1855000000000000000")
+    await run_jobs()
+    fake_web.status[
+        "https://publish.x.com/oembed?url=https%3A%2F%2Fx.com%2Faynamyrat%2Fstatus%2F1855000000000000000"
+        "&omit_script=1&dnt=1&lang=en"
+    ] = 404
+    await _sync_now()
+    link = await _link(client, created["id"])
+    assert link["status"] == "ready"
+    assert link["source_deleted_at"] is not None
+    assert link["post_text"].startswith("Salam, dünýä!")
+
+
+async def test_missing_x_post_fails_cleanly(client: httpx.AsyncClient, fake_web: FakeWeb) -> None:
+    created = await new_thought(client, "https://x.com/nobody/status/1")
+    await run_jobs()
+    link = await _link(client, created["id"])
+    assert (link["status"], link["error_code"]) == ("failed", "link_not_found")

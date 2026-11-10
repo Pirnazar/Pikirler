@@ -73,6 +73,7 @@ def register_all() -> None:
     from app.modules.pikirler.services import links
 
     register(links.FETCH_JOB, links.run_job, on_dead=links.gave_up)
+    register(links.SYNC_JOB, links.sync_job)
     register(links.DELETE_COVERS_JOB, links.delete_covers_job)
     from app.modules.pikirler.services import data_export
 

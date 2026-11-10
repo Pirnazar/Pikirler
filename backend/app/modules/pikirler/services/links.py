@@ -15,11 +15,12 @@ import logging
 import re
 import uuid
 from collections.abc import Sequence
+from datetime import timedelta
 from typing import Any
 from urllib.parse import quote
 
 from PIL import Image, ImageOps
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -35,6 +36,8 @@ from app.storage import get_storage
 log = logging.getLogger("pikirler.links")
 
 FETCH_JOB = "fetch_link"
+SYNC_JOB = "sync_link"
+SYNC_BATCH = 20
 DELETE_COVERS_JOB = "delete_link_covers"
 COVER_MAX_SIDE = 1200
 SEARCH_TEXT_CHARS = 50_000
@@ -168,7 +171,11 @@ POST_TEXT_CHARS = 1200
 
 
 def _profile_url(row_site: str | None, username: str | None) -> str | None:
-    if not username or row_site != "Teswirler":
+    if not username:
+        return None
+    if row_site == "X":
+        return f"https://x.com/{quote(username, safe='')}"
+    if row_site != "Teswirler":
         return None
     site = get_settings().teswirler_site_url.rstrip("/")
     return f"{site}/@{quote(username, safe='')}"
@@ -184,6 +191,8 @@ def _comment(raw: dict[str, Any], site: str | None) -> SavedComment:
         quote=raw.get("quote"),
         created_at=raw.get("created_at"),
         likes=raw.get("likes") or 0,
+        image_url=raw.get("image_url"),
+        deleted_at=raw.get("deleted_at"),
         replies=[_comment(r, site) for r in raw.get("replies") or [] if isinstance(r, dict)],
     )
 
@@ -213,6 +222,9 @@ def out(row: LinkSnapshot) -> LinkOut:
         published_at=row.published_at,
         edited_at=row.edited_at,
         comment_count=row.comment_count,
+        deleted_comment_count=row.deleted_comment_count or 0,
+        synced_at=row.synced_at,
+        source_deleted_at=row.source_deleted_at,
         post_text=_post_text(row),
         excerpt=row.excerpt,
         has_text=bool(row.content_text),
@@ -319,20 +331,120 @@ async def _store_cover(owner_id: uuid.UUID, link_id: uuid.UUID, image_url: str) 
     return key
 
 
+# --- comments kept in step with the site ----------------------------------------
+
+
+def _mark_deleted(comment: dict[str, Any], when: str) -> dict[str, Any]:
+    marked = dict(comment)
+    marked["deleted_at"] = comment.get("deleted_at") or when
+    marked["replies"] = [
+        _mark_deleted(r, when) for r in comment.get("replies") or [] if isinstance(r, dict)
+    ]
+    return marked
+
+
+def merge_comments(
+    old: list[Any], new: list[dict[str, Any]], complete: bool, when: str
+) -> list[dict[str, Any]]:
+    """The site's current comments plus every comment saved before that is no
+    longer there. Those are marked deleted, but only when ``new`` is the
+    complete list: a partial download never marks anything."""
+    old_by_id = {c["id"]: c for c in old if isinstance(c, dict) and c.get("id")}
+    merged: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for comment in new:
+        before = old_by_id.get(comment.get("id") or "")
+        item = dict(comment)
+        item["deleted_at"] = None
+        item["replies"] = merge_comments(
+            (before or {}).get("replies") or [], comment.get("replies") or [], complete, when
+        )
+        if comment.get("id"):
+            seen.add(comment["id"])
+        merged.append(item)
+    for comment in old:
+        if not isinstance(comment, dict) or (comment.get("id") and comment["id"] in seen):
+            continue
+        merged.append(_mark_deleted(comment, when) if complete and comment.get("id") else comment)
+    merged.sort(key=lambda c: c.get("created_at") or "")
+    return merged
+
+
+def count_comments(comments: list[Any]) -> tuple[int, int]:
+    """(still on the site, deleted on the site)."""
+    alive = deleted = 0
+    for c in comments:
+        if not isinstance(c, dict):
+            continue
+        if c.get("deleted_at"):
+            deleted += 1
+        else:
+            alive += 1
+        a, d = count_comments(c.get("replies") or [])
+        alive, deleted = alive + a, deleted + d
+    return alive, deleted
+
+
+def _apply(row: LinkSnapshot, page: pages.Page) -> None:
+    """Copy what was read from the site onto the snapshot."""
+    now = utcnow()
+    row.final_url = page.final_url if page.final_url != row.url else None
+    row.kind = page.kind
+    row.site_name = page.site_name
+    row.title = page.title
+    row.author = page.author
+    row.author_username = page.author_username
+    row.published_at = page.published_at
+    row.edited_at = page.edited_at
+    if page.comments is not None:
+        # A failed comment download keeps what was saved before.
+        row.comments = merge_comments(
+            row.comments or [], page.comments, page.comments_complete, now.isoformat()
+        )
+        row.comment_count, row.deleted_comment_count = count_comments(row.comments)
+    row.excerpt = page.excerpt
+    row.content_text = page.text or None
+    row.word_count = len(page.text.split()) if page.text else None
+    row.status = LinkStatus.ready.value
+    row.error_code = None
+    row.synced_at = now
+    row.source_deleted_at = None
+
+
+async def _source_gone(db: AsyncSession, link_id: uuid.UUID) -> dict[str, Any]:
+    """The original no longer exists: keep the copy, note when it went."""
+    row = await db.get(LinkSnapshot, link_id, with_for_update=True)
+    if row is not None:
+        now = utcnow()
+        row.source_deleted_at = row.source_deleted_at or now
+        row.synced_at = now
+        row.status = LinkStatus.ready.value
+        row.error_code = None
+        await db.commit()
+    log.info("link_source_deleted")
+    return {"status": "source_deleted"}
+
+
 async def run(db: AsyncSession, link_id: uuid.UUID) -> dict[str, Any]:
+    """First download of a link, or a requested refresh."""
     row = await db.get(LinkSnapshot, link_id)
     if row is None:
         return {"skipped": "gone"}
     if row.status != LinkStatus.pending.value:
         return {"skipped": row.status}
     url, owner_id, thought_id = row.url, row.owner_id, row.thought_id
+    had_copy = row.fetched_at is not None
     await db.commit()  # no transaction stays open during the download
 
     try:
         page = await pages.extract(url)
+    except web.PageNotFound:
+        if had_copy:
+            return await _source_gone(db, link_id)
+        return await _fail(db, link_id, web.PageNotFound.code)
     except web.FetchError as exc:
         if exc.retryable:
-            raise  # the runner retries with backoff; ``gave_up`` marks it failed
+            raise  # the runner retries with backoff; ``gave_up`` ends it
         return await _fail(db, link_id, exc.code)
     cover = await _store_cover(owner_id, link_id, page.image_url) if page.image_url else None
 
@@ -341,25 +453,8 @@ async def run(db: AsyncSession, link_id: uuid.UUID) -> dict[str, Any]:
         await _delete_covers_later(db, owner_id, [cover] if cover else [])
         await db.commit()
         return {"skipped": "gone"}
-    old_cover = row.cover_key
-    row.final_url = page.final_url if page.final_url != url else None
-    row.kind = page.kind
-    row.site_name = page.site_name
-    row.title = page.title
-    row.author = page.author
-    row.author_username = page.author_username
-    row.published_at = page.published_at
-    row.edited_at = page.edited_at
-    if page.comments is not None or row.comments is None:
-        # A failed comment download keeps the comments saved earlier.
-        row.comments = page.comments
-        row.comment_count = page.comment_count
-    row.excerpt = page.excerpt
-    row.content_text = page.text or None
-    row.word_count = len(page.text.split()) if page.text else None
-    row.cover_key = cover or old_cover
-    row.status = LinkStatus.ready.value
-    row.error_code = None
+    _apply(row, page)
+    row.cover_key = cover or row.cover_key
     row.fetched_at = utcnow()
     from app.modules.pikirler.services.thoughts import refresh_search_documents
 
@@ -369,11 +464,110 @@ async def run(db: AsyncSession, link_id: uuid.UUID) -> dict[str, Any]:
     return {"status": "ready", "words": row.word_count or 0}
 
 
+async def sync_with_site(db: AsyncSession, link_id: uuid.UUID) -> dict[str, Any]:
+    """Background check of a saved copy against the site. Never shows the
+    copy as "saving" and never fails it: a problem just waits for next time."""
+    row = await db.get(LinkSnapshot, link_id)
+    if row is None or row.status != LinkStatus.ready.value:
+        return {"skipped": "not ready"}
+    url, owner_id, thought_id = row.url, row.owner_id, row.thought_id
+    needs_cover = row.cover_key is None
+    await db.commit()
+
+    try:
+        page = await pages.extract(url)
+    except web.PageNotFound:
+        return await _source_gone(db, link_id)
+    except web.FetchError as exc:
+        row = await db.get(LinkSnapshot, link_id, with_for_update=True)
+        if row is not None:
+            row.synced_at = utcnow()
+            await db.commit()
+        return {"status": "unchanged", "error_code": exc.code}
+    cover = None
+    if needs_cover and page.image_url:
+        cover = await _store_cover(owner_id, link_id, page.image_url)
+
+    row = await db.get(LinkSnapshot, link_id, with_for_update=True)
+    if row is None or row.url != url or row.status != LinkStatus.ready.value:
+        await _delete_covers_later(db, owner_id, [cover] if cover else [])
+        await db.commit()
+        return {"skipped": "changed"}
+    _apply(row, page)
+    row.cover_key = cover or row.cover_key
+    from app.modules.pikirler.services.thoughts import refresh_search_documents
+
+    await refresh_search_documents(db, owner_id, [thought_id])
+    await db.commit()
+    log.info("link_synced", extra={"count": row.comment_count or 0})
+    return {"status": "synced", "comments": row.comment_count, "deleted": row.deleted_comment_count}
+
+
+def sync_interval(age: timedelta) -> timedelta:
+    """How often a copy is checked, by how old the original is."""
+    if age < timedelta(days=2):
+        return timedelta(minutes=30)
+    if age < timedelta(days=14):
+        return timedelta(hours=6)
+    if age < timedelta(days=90):
+        return timedelta(days=1)
+    return timedelta(days=7)
+
+
+# Sites whose copies are checked in the background (X: only whether it still exists).
+SYNCABLE = (
+    LinkSnapshot.url.ilike("https://teswirler.com/%")
+    | LinkSnapshot.url.ilike("https://www.teswirler.com/%")
+    | (LinkSnapshot.site_name == "X")
+)
+
+
+async def schedule_sync(db: AsyncSession, batch: int = SYNC_BATCH) -> int:
+    """Queue background checks for the copies that are due (worker cron)."""
+    if not get_settings().link_sync_enabled:
+        return 0
+    now = utcnow()
+    last = func.coalesce(LinkSnapshot.synced_at, LinkSnapshot.fetched_at)
+    rows = (
+        await db.execute(
+            select(LinkSnapshot.id, LinkSnapshot.owner_id, LinkSnapshot.published_at, last)
+            .join(Thought, Thought.id == LinkSnapshot.thought_id)
+            .where(
+                LinkSnapshot.status == LinkStatus.ready.value,
+                Thought.deleted_at.is_(None),
+                SYNCABLE,
+            )
+            .order_by(last.asc().nulls_first())
+            .limit(500)
+        )
+    ).all()
+    due = []
+    for link_id, owner_id, published, checked in rows:
+        age = now - (published or checked or now)
+        if checked is None or now - checked >= sync_interval(age):
+            due.append((link_id, owner_id))
+        if len(due) >= batch:
+            break
+    for link_id, owner_id in due:
+        await jobs.enqueue(
+            db,
+            SYNC_JOB,
+            {"link_id": str(link_id)},
+            owner_id=owner_id,
+            dedupe_key=f"link-sync:{link_id}",
+            max_attempts=1,
+        )
+    await db.commit()
+    await jobs.kick(db)
+    return len(due)
+
+
 async def _fail(db: AsyncSession, link_id: uuid.UUID, code: str) -> dict[str, Any]:
     row = await db.get(LinkSnapshot, link_id, with_for_update=True)
     if row is not None:
-        row.status = LinkStatus.failed.value
-        row.error_code = code[:64]
+        # A copy that exists stays readable; only a first download can fail.
+        row.status = LinkStatus.ready.value if row.fetched_at else LinkStatus.failed.value
+        row.error_code = None if row.fetched_at else code[:64]
         await db.commit()
     log.info("link_failed", extra={"error_code": code})
     return {"status": "failed", "error_code": code}
@@ -381,6 +575,10 @@ async def _fail(db: AsyncSession, link_id: uuid.UUID, code: str) -> dict[str, An
 
 async def run_job(db: AsyncSession, payload: dict[str, Any]) -> dict[str, Any]:
     return await run(db, uuid.UUID(payload["link_id"]))
+
+
+async def sync_job(db: AsyncSession, payload: dict[str, Any]) -> dict[str, Any]:
+    return await sync_with_site(db, uuid.UUID(payload["link_id"]))
 
 
 async def gave_up(db: AsyncSession, payload: dict[str, Any], error: str) -> None:

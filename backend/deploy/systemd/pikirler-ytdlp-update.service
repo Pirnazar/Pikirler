@@ -1,0 +1,8 @@
+[Unit]
+Description=Pikirler: refresh yt-dlp in the backend image (kept only if a test download works)
+
+[Service]
+Type=oneshot
+# The checkout lives in ~/pikirler; adjust if it is elsewhere.
+ExecStart=%h/pikirler/backend/scripts/update-ytdlp.sh
+TimeoutStartSec=30min

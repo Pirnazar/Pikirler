@@ -28,6 +28,13 @@ RUN mkdir app && touch app/__init__.py \
  && chmod +x /usr/local/bin/pikirler
 ENV PYTHONPATH=/srv/app
 
+# yt-dlp breaks whenever YouTube or TikTok change their sites, and a newer
+# release usually fixes it. scripts/update-ytdlp.sh rebuilds with a new value
+# here, which re-runs only this layer.
+ARG YTDLP_REFRESH=initial
+RUN pip install --upgrade "yt-dlp" && echo "yt-dlp refreshed: $YTDLP_REFRESH"
+ENV PIKIRLER_YTDLP_REFRESHED=$YTDLP_REFRESH
+
 COPY alembic.ini ./
 COPY app ./app
 COPY tests ./tests

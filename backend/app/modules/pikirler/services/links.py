@@ -1,10 +1,10 @@
-"""Saved copies of the web pages a thought links to.
+"""Saved copies of the web pages thoughts link to.
 
-When a thought contains links, each one gets a ``LinkSnapshot`` and a
-background job fetches it once: title, author, date, the article text and a
-cover picture. The copy stays with the thought (searchable, exported) even
-if the page later changes or disappears. Editing the thought keeps the copies
-of links that are still there and drops the others.
+Each page is saved once per owner (``LinkSnapshot``, keyed by its canonical
+address) and shared by every thought that links to it (``ThoughtLink``). A
+background job fetches it: title, author, date, text, cover, video, comments.
+The copy stays readable (searchable, exported) even if the page changes or
+disappears. A copy no thought links to any more is removed with its files.
 """
 
 from __future__ import annotations
@@ -23,17 +23,25 @@ from typing import Any
 from urllib.parse import quote
 
 from PIL import Image, ImageOps
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, exists, func, select, update
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import utcnow
 from app.core.exceptions import NotFound
 from app.modules.pikirler.integrations import media_download, pages, web
-from app.modules.pikirler.models import Attachment, LinkSnapshot, Thought
+from app.modules.pikirler.models import Attachment, LinkSnapshot, Thought, ThoughtLink
 from app.modules.pikirler.models.enums import AttachmentKind, LinkStatus, ProcessingStatus
-from app.modules.pikirler.schemas.links import LinkDetail, LinkMedia, LinkOut, SavedComment
+from app.modules.pikirler.schemas.links import (
+    LinkDetail,
+    LinkMedia,
+    LinkOut,
+    LinkSummary,
+    SavedComment,
+)
 from app.modules.pikirler.services import jobs, media
+from app.modules.pikirler.services.link_keys import canonical_url
 from app.storage import get_storage
 
 log = logging.getLogger("pikirler.links")
@@ -69,44 +77,134 @@ def cover_key(owner_id: uuid.UUID, link_id: uuid.UUID) -> str:
     return f"owners/{owner_id}/links/{link_id}/cover.jpg"
 
 
-# --- keeping snapshots in step with the thought ------------------------------------
+# --- thoughts and the copies they link to ------------------------------------------
+
+
+async def _page_for(db: AsyncSession, owner_id: uuid.UUID, url: str) -> tuple[uuid.UUID, bool]:
+    """The copy of the page ``url`` points to, created if missing. -> (id, created)."""
+    key = canonical_url(url)
+    created = (
+        await db.execute(
+            insert(LinkSnapshot)
+            .values(id=uuid.uuid4(), owner_id=owner_id, canonical_url=key, url=url)
+            .on_conflict_do_nothing(index_elements=["owner_id", "canonical_url"])
+            .returning(LinkSnapshot.id)
+        )
+    ).scalar_one_or_none()
+    if created is not None:
+        return created, True
+    found = (
+        await db.execute(
+            select(LinkSnapshot.id).where(
+                LinkSnapshot.owner_id == owner_id, LinkSnapshot.canonical_url == key
+            )
+        )
+    ).scalar_one()
+    return found, False
 
 
 async def sync(db: AsyncSession, thought: Thought) -> None:
-    """Called inside the transaction that creates or edits ``thought``."""
+    """Called inside the transaction that creates or edits ``thought``: link it
+    to the copies of the pages it mentions, reusing copies that already exist."""
     settings = get_settings()
     wanted = extract_urls(thought.content) if settings.link_fetch_enabled else []
-    existing = {
-        row.url: row
-        for row in (
-            await db.execute(select(LinkSnapshot).where(LinkSnapshot.thought_id == thought.id))
+    current = {
+        link.link_id: link
+        for link in (
+            await db.execute(select(ThoughtLink).where(ThoughtLink.thought_id == thought.id))
         ).scalars()
     }
-    gone = [row for url, row in existing.items() if url not in wanted]
-    if gone:
-        keys = [row.cover_key for row in gone if row.cover_key]
-        await db.execute(delete(LinkSnapshot).where(LinkSnapshot.id.in_([r.id for r in gone])))
-        await _delete_covers_later(db, thought.owner_id, keys)
+    keep: set[uuid.UUID] = set()
     for position, url in enumerate(wanted):
-        row = existing.get(url)
-        if row is not None:
-            row.position = position
+        link_id, created = await _page_for(db, thought.owner_id, url)
+        if link_id in keep:  # two spellings of the same page in one thought
             continue
-        row = LinkSnapshot(
-            owner_id=thought.owner_id, thought_id=thought.id, url=url, position=position
+        keep.add(link_id)
+        link = current.get(link_id)
+        if link is not None:
+            link.url, link.position = url, position
+            continue
+        db.add(
+            ThoughtLink(
+                thought_id=thought.id,
+                link_id=link_id,
+                owner_id=thought.owner_id,
+                url=url,
+                position=position,
+            )
         )
-        db.add(row)
-        await db.flush()
-        await _enqueue(db, row)
+        if created:
+            await _enqueue_id(db, link_id, thought.owner_id)
+        else:
+            # Linked again: a copy that failed before gets another chance.
+            retried = (
+                await db.execute(
+                    update(LinkSnapshot)
+                    .where(
+                        LinkSnapshot.id == link_id,
+                        LinkSnapshot.status == LinkStatus.failed.value,
+                        LinkSnapshot.error_code != web.Blocked.code,
+                    )
+                    .values(status=LinkStatus.pending.value, error_code=None)
+                    .returning(LinkSnapshot.id)
+                    .execution_options(synchronize_session="fetch")
+                )
+            ).scalar_one_or_none()
+            if retried is not None:
+                await _enqueue_id(db, link_id, thought.owner_id)
+    await db.flush()
+    gone = [link_id for link_id in current if link_id not in keep]
+    if gone:
+        await db.execute(
+            delete(ThoughtLink).where(
+                ThoughtLink.thought_id == thought.id, ThoughtLink.link_id.in_(gone)
+            )
+        )
+        await drop_unlinked(db, thought.owner_id, gone)
+
+
+async def drop_unlinked(
+    db: AsyncSession, owner_id: uuid.UUID, link_ids: Sequence[uuid.UUID]
+) -> int:
+    """Remove those of ``link_ids`` no thought links to any more, with their
+    cover and downloaded video."""
+    if not link_ids:
+        return 0
+    rows = list(
+        (
+            await db.execute(
+                select(LinkSnapshot).where(
+                    LinkSnapshot.id.in_(list(link_ids)),
+                    ~exists().where(ThoughtLink.link_id == LinkSnapshot.id),
+                )
+            )
+        ).scalars()
+    )
+    if not rows:
+        return 0
+    await _delete_covers_later(db, owner_id, [r.cover_key for r in rows if r.cover_key])
+    videos = [r.media_attachment_id for r in rows if r.media_attachment_id]
+    if videos:  # housekeeping deletes the files after the usual retention
+        await db.execute(
+            update(Attachment)
+            .where(Attachment.id.in_(videos), Attachment.deleted_at.is_(None))
+            .values(deleted_at=utcnow())
+        )
+    await db.execute(delete(LinkSnapshot).where(LinkSnapshot.id.in_([r.id for r in rows])))
+    return len(rows)
 
 
 async def _enqueue(db: AsyncSession, row: LinkSnapshot) -> None:
+    await _enqueue_id(db, row.id, row.owner_id)
+
+
+async def _enqueue_id(db: AsyncSession, link_id: uuid.UUID, owner_id: uuid.UUID) -> None:
     await jobs.enqueue(
         db,
         FETCH_JOB,
-        {"link_id": str(row.id)},
-        owner_id=row.owner_id,
-        dedupe_key=f"link:{row.id}",
+        {"link_id": str(link_id)},
+        owner_id=owner_id,
+        dedupe_key=f"link:{link_id}",
         max_attempts=4,
     )
 
@@ -117,22 +215,38 @@ async def _delete_covers_later(db: AsyncSession, owner_id: uuid.UUID, keys: list
         await jobs.enqueue(db, DELETE_COVERS_JOB, {"keys": keys}, owner_id=owner_id)
 
 
-async def covers_of_thoughts(db: AsyncSession, thought_ids: Sequence[uuid.UUID]) -> list[str]:
-    if not thought_ids:
-        return []
-    rows = await db.execute(
-        select(LinkSnapshot.cover_key).where(
-            LinkSnapshot.thought_id.in_(list(thought_ids)), LinkSnapshot.cover_key.is_not(None)
-        )
-    )
-    return [k for k in rows.scalars() if k]
-
-
 async def forget_thoughts(
     db: AsyncSession, owner_id: uuid.UUID, thought_ids: Sequence[uuid.UUID]
 ) -> None:
-    """Before thoughts are hard-deleted: their cover files go with them."""
-    await _delete_covers_later(db, owner_id, await covers_of_thoughts(db, thought_ids))
+    """Before thoughts are hard-deleted: copies only they link to go with them."""
+    if not thought_ids:
+        return
+    link_ids = list(
+        (
+            await db.execute(
+                select(ThoughtLink.link_id).where(ThoughtLink.thought_id.in_(list(thought_ids)))
+            )
+        ).scalars()
+    )
+    await db.execute(delete(ThoughtLink).where(ThoughtLink.thought_id.in_(list(thought_ids))))
+    await drop_unlinked(db, owner_id, link_ids)
+
+
+async def thoughts_of(db: AsyncSession, link_id: uuid.UUID) -> list[uuid.UUID]:
+    return list(
+        (
+            await db.execute(select(ThoughtLink.thought_id).where(ThoughtLink.link_id == link_id))
+        ).scalars()
+    )
+
+
+def _alive() -> Any:
+    """The copy is linked from at least one thought that is not in the trash."""
+    return (
+        exists()
+        .where(ThoughtLink.link_id == LinkSnapshot.id, ThoughtLink.thought_id == Thought.id)
+        .where(Thought.deleted_at.is_(None))
+    )
 
 
 async def refetch(db: AsyncSession, owner_id: uuid.UUID, link_id: uuid.UUID) -> LinkOut:
@@ -151,14 +265,8 @@ async def refetch(db: AsyncSession, owner_id: uuid.UUID, link_id: uuid.UUID) -> 
 async def _get(
     db: AsyncSession, owner_id: uuid.UUID, link_id: uuid.UUID, *, for_update: bool = False
 ) -> LinkSnapshot:
-    stmt = (
-        select(LinkSnapshot)
-        .join(Thought, Thought.id == LinkSnapshot.thought_id)
-        .where(
-            LinkSnapshot.id == link_id,
-            LinkSnapshot.owner_id == owner_id,
-            Thought.deleted_at.is_(None),
-        )
+    stmt = select(LinkSnapshot).where(
+        LinkSnapshot.id == link_id, LinkSnapshot.owner_id == owner_id, _alive()
     )
     if for_update:
         stmt = stmt.with_for_update(of=LinkSnapshot)
@@ -193,7 +301,24 @@ def _profile_url(row_site: str | None, username: str | None) -> str | None:
     return f"{site}/@{quote(username, safe='')}"
 
 
-def _comment(raw: dict[str, Any], site: str | None) -> SavedComment:
+def _is_new(raw: dict[str, Any], seen: str | None) -> bool:
+    first = raw.get("first_seen_at")
+    return bool(first and seen and not raw.get("deleted_at") and first > seen)
+
+
+def count_new(comments: list[Any], seen: str | None) -> int:
+    total = 0
+    for c in comments:
+        if isinstance(c, dict):
+            total += int(_is_new(c, seen)) + count_new(c.get("replies") or [], seen)
+    return total
+
+
+def _seen(row: LinkSnapshot) -> str | None:
+    return row.comments_seen_at.isoformat() if row.comments_seen_at else None
+
+
+def _comment(raw: dict[str, Any], site: str | None, seen: str | None = None) -> SavedComment:
     return SavedComment(
         id=raw.get("id"),
         author=raw.get("author"),
@@ -205,7 +330,8 @@ def _comment(raw: dict[str, Any], site: str | None) -> SavedComment:
         likes=raw.get("likes") or 0,
         image_url=raw.get("image_url"),
         deleted_at=raw.get("deleted_at"),
-        replies=[_comment(r, site) for r in raw.get("replies") or [] if isinstance(r, dict)],
+        is_new=_is_new(raw, seen),
+        replies=[_comment(r, site, seen) for r in raw.get("replies") or [] if isinstance(r, dict)],
     )
 
 
@@ -246,10 +372,10 @@ async def _media_of(db: AsyncSession, rows: Sequence[LinkSnapshot]) -> dict[uuid
     return {a.id: a for a in found}
 
 
-def out(row: LinkSnapshot, media_att: Attachment | None = None) -> LinkOut:
+def out(row: LinkSnapshot, media_att: Attachment | None = None, url: str | None = None) -> LinkOut:
     return LinkOut(
         id=row.id,
-        url=row.url,
+        url=url or row.url,
         final_url=row.final_url,
         status=LinkStatus(row.status),
         error_code=row.error_code,
@@ -263,6 +389,8 @@ def out(row: LinkSnapshot, media_att: Attachment | None = None) -> LinkOut:
         edited_at=row.edited_at,
         comment_count=row.comment_count,
         deleted_comment_count=row.deleted_comment_count or 0,
+        new_comment_count=count_new(row.comments or [], _seen(row)),
+        has_summary=row.summary is not None,
         synced_at=row.synced_at,
         source_deleted_at=row.source_deleted_at,
         post_text=_post_text(row),
@@ -282,13 +410,38 @@ def out(row: LinkSnapshot, media_att: Attachment | None = None) -> LinkOut:
 
 async def detail(db: AsyncSession, owner_id: uuid.UUID, link_id: uuid.UUID) -> LinkDetail:
     row = await _get(db, owner_id, link_id)
-    comments = [_comment(c, row.site_name) for c in row.comments or [] if isinstance(c, dict)]
+    seen = _seen(row)
+    comments = [_comment(c, row.site_name, seen) for c in row.comments or [] if isinstance(c, dict)]
     att = (
         (await _media_of(db, [row])).get(row.media_attachment_id)
         if row.media_attachment_id
         else None
     )
-    return LinkDetail(**out(row, att).model_dump(), text=row.content_text or "", comments=comments)
+    return LinkDetail(
+        **out(row, att).model_dump(),
+        text=row.content_text or "",
+        comments=comments,
+        summary=summary_out(row),
+    )
+
+
+def summary_out(row: LinkSnapshot) -> LinkSummary | None:
+    if not row.summary:
+        return None
+    return LinkSummary(
+        gist=str(row.summary.get("gist") or ""),
+        points=[str(x) for x in row.summary.get("points") or []],
+        language=row.summary_language,
+        created_at=row.summary_at,
+    )
+
+
+async def mark_seen(db: AsyncSession, owner_id: uuid.UUID, link_id: uuid.UUID) -> LinkOut:
+    """The owner opened the copy: its comments are no longer "new"."""
+    row = await _get(db, owner_id, link_id, for_update=True)
+    row.comments_seen_at = utcnow()
+    await db.commit()
+    return out(row)
 
 
 async def by_thought(
@@ -296,38 +449,39 @@ async def by_thought(
 ) -> dict[uuid.UUID, list[LinkOut]]:
     if not thought_ids:
         return {}
-    rows = list(
-        (
-            await db.execute(
-                select(LinkSnapshot)
-                .where(LinkSnapshot.thought_id.in_(list(thought_ids)))
-                .order_by(LinkSnapshot.position)
-            )
-        ).scalars()
-    )
-    atts = await _media_of(db, rows)
+    pairs = (
+        await db.execute(
+            select(ThoughtLink, LinkSnapshot)
+            .join(LinkSnapshot, LinkSnapshot.id == ThoughtLink.link_id)
+            .where(ThoughtLink.thought_id.in_(list(thought_ids)))
+            .order_by(ThoughtLink.position)
+        )
+    ).all()
+    atts = await _media_of(db, [row for _, row in pairs])
     result: dict[uuid.UUID, list[LinkOut]] = {}
-    for row in rows:
+    for link, row in pairs:
         att = atts.get(row.media_attachment_id) if row.media_attachment_id else None
-        result.setdefault(row.thought_id, []).append(out(row, att))
+        result.setdefault(link.thought_id, []).append(out(row, att, url=link.url))
     return result
 
 
 async def search_texts(db: AsyncSession, thought_ids: Sequence[uuid.UUID]) -> dict[uuid.UUID, str]:
-    """Title, site, author and text of saved pages, for the search document."""
+    """Title, site, author, text and comments of saved pages, for the search document."""
     if not thought_ids:
         return {}
     rows = await db.execute(
         select(
-            LinkSnapshot.thought_id,
+            ThoughtLink.thought_id,
             LinkSnapshot.site_name,
             LinkSnapshot.title,
             LinkSnapshot.author,
             LinkSnapshot.content_text,
             LinkSnapshot.author_username,
             LinkSnapshot.comments,
-        ).where(
-            LinkSnapshot.thought_id.in_(list(thought_ids)),
+        )
+        .join(LinkSnapshot, LinkSnapshot.id == ThoughtLink.link_id)
+        .where(
+            ThoughtLink.thought_id.in_(list(thought_ids)),
             LinkSnapshot.status == LinkStatus.ready.value,
         )
     )
@@ -411,6 +565,7 @@ def merge_comments(
         before = old_by_id.get(comment.get("id") or "")
         item = dict(comment)
         item["deleted_at"] = None
+        item["first_seen_at"] = (before or {}).get("first_seen_at") or when
         item["replies"] = merge_comments(
             (before or {}).get("replies") or [], comment.get("replies") or [], complete, when
         )
@@ -451,6 +606,8 @@ def _apply(row: LinkSnapshot, page: pages.Page) -> None:
     row.author_username = page.author_username
     row.published_at = page.published_at
     row.edited_at = page.edited_at
+    if row.comments_seen_at is None:  # comments of the first download are not "new"
+        row.comments_seen_at = now
     if page.comments is not None:
         # A failed comment download keeps what was saved before.
         row.comments = merge_comments(
@@ -488,7 +645,7 @@ async def run(db: AsyncSession, link_id: uuid.UUID) -> dict[str, Any]:
         return {"skipped": "gone"}
     if row.status != LinkStatus.pending.value:
         return {"skipped": row.status}
-    url, owner_id, thought_id = row.url, row.owner_id, row.thought_id
+    url, owner_id = row.url, row.owner_id
     had_copy = row.fetched_at is not None
     await db.commit()  # no transaction stays open during the download
 
@@ -515,7 +672,7 @@ async def run(db: AsyncSession, link_id: uuid.UUID) -> dict[str, Any]:
     await _queue_media(db, row, retry_failed=True)
     from app.modules.pikirler.services.thoughts import refresh_search_documents
 
-    await refresh_search_documents(db, owner_id, [thought_id])
+    await refresh_search_documents(db, owner_id, await thoughts_of(db, link_id))
     await db.commit()
     await jobs.kick(db)
     log.info("link_saved", extra={"words": row.word_count or 0})
@@ -528,7 +685,7 @@ async def sync_with_site(db: AsyncSession, link_id: uuid.UUID) -> dict[str, Any]
     row = await db.get(LinkSnapshot, link_id)
     if row is None or row.status != LinkStatus.ready.value:
         return {"skipped": "not ready"}
-    url, owner_id, thought_id = row.url, row.owner_id, row.thought_id
+    url, owner_id = row.url, row.owner_id
     needs_cover = row.cover_key is None
     await db.commit()
 
@@ -556,7 +713,7 @@ async def sync_with_site(db: AsyncSession, link_id: uuid.UUID) -> dict[str, Any]
     await _queue_media(db, row, retry_failed=False)
     from app.modules.pikirler.services.thoughts import refresh_search_documents
 
-    await refresh_search_documents(db, owner_id, [thought_id])
+    await refresh_search_documents(db, owner_id, await thoughts_of(db, link_id))
     await db.commit()
     await jobs.kick(db)
     log.info("link_synced", extra={"count": row.comment_count or 0})
@@ -574,8 +731,8 @@ def sync_interval(age: timedelta) -> timedelta:
     return timedelta(days=7)
 
 
-# Sites whose copies are checked in the background. Teswirler (and YouTube with an
-# API key) also bring new and deleted comments; the others: edits and deletion.
+# Sites whose copies are checked in the background. Teswirler also brings new and
+# deleted comments; the others: edits and deletion.
 SYNCABLE = (
     LinkSnapshot.url.ilike("https://teswirler.com/%")
     | LinkSnapshot.url.ilike("https://www.teswirler.com/%")
@@ -592,12 +749,7 @@ async def schedule_sync(db: AsyncSession, batch: int = SYNC_BATCH) -> int:
     rows = (
         await db.execute(
             select(LinkSnapshot.id, LinkSnapshot.owner_id, LinkSnapshot.published_at, last)
-            .join(Thought, Thought.id == LinkSnapshot.thought_id)
-            .where(
-                LinkSnapshot.status == LinkStatus.ready.value,
-                Thought.deleted_at.is_(None),
-                SYNCABLE,
-            )
+            .where(LinkSnapshot.status == LinkStatus.ready.value, _alive(), SYNCABLE)
             .order_by(last.asc().nulls_first())
             .limit(500)
         )
@@ -673,6 +825,7 @@ async def _media_failed(db: AsyncSession, link_id: uuid.UUID, code: str) -> dict
     if row is not None and row.media_status == "pending":
         row.media_status = "failed"
         row.media_error = code[:64]
+        row.media_at = utcnow()
         await db.commit()
     log.info("link_media_failed", extra={"error_code": code})
     return {"status": "failed", "error_code": code}
@@ -738,6 +891,7 @@ async def download_media(db: AsyncSession, link_id: uuid.UUID) -> dict[str, Any]
     row.media_attachment_id = attachment_id
     row.media_status = "ready"
     row.media_error = None
+    row.media_at = now
     # Thumbnail, duration and dimensions, like any uploaded video.
     await jobs.enqueue(
         db,
@@ -758,6 +912,48 @@ async def media_job(db: AsyncSession, payload: dict[str, Any]) -> dict[str, Any]
 
 async def media_gave_up(db: AsyncSession, payload: dict[str, Any], error: str) -> None:
     await _media_failed(db, uuid.UUID(payload["link_id"]), "media_failed")
+
+
+# Failures that say nothing about the downloader itself.
+EXPECTED_MEDIA_ERRORS = {"media_too_large", "media_too_long", "media_login_required"}
+
+
+async def media_health(db: AsyncSession, owner_id: uuid.UUID) -> dict[str, Any]:
+    """The video downloader's version and how its last downloads went. "broken":
+    most of the recent downloads failed for no expected reason (YouTube or
+    TikTok probably changed something and yt-dlp needs an update)."""
+    import os
+
+    try:
+        from yt_dlp.version import __version__ as version
+    except ImportError:  # pragma: no cover - always installed
+        version = None
+    rows = (
+        await db.execute(
+            select(
+                LinkSnapshot.site_name,
+                LinkSnapshot.media_status,
+                LinkSnapshot.media_error,
+                LinkSnapshot.media_at,
+            )
+            .where(LinkSnapshot.owner_id == owner_id, LinkSnapshot.media_at.is_not(None))
+            .order_by(LinkSnapshot.media_at.desc())
+            .limit(8)
+        )
+    ).all()
+    recent = [
+        {"site": site, "ok": status == "ready", "error": error, "at": at}
+        for site, status, error, at in rows
+    ]
+    last5 = recent[:5]
+    bad = [r for r in last5 if not r["ok"] and r["error"] not in EXPECTED_MEDIA_ERRORS]
+    return {
+        "enabled": get_settings().link_media_max_mb > 0,
+        "ytdlp_version": version,
+        "refreshed": os.environ.get("PIKIRLER_YTDLP_REFRESHED") or None,
+        "recent": recent,
+        "broken": len(bad) >= 3 or (len(last5) >= 2 and all(r in bad for r in last5[:2])),
+    }
 
 
 async def delete_covers_job(db: AsyncSession, payload: dict[str, Any]) -> dict[str, Any]:

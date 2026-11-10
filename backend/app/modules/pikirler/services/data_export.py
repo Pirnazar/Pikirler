@@ -35,6 +35,7 @@ from app.modules.pikirler.models import (
     Thought,
     ThoughtAttachment,
     ThoughtEmbedding,
+    ThoughtLink,
     ThoughtProject,
     ThoughtRelation,
     ThoughtRevision,
@@ -90,12 +91,14 @@ async def build_export(db: AsyncSession, owner_id: uuid.UUID) -> dict[str, Any]:
     for pl in await all_of(ThoughtProject):
         project_links.setdefault(pl.thought_id, []).append(str(pl.project_id))
     saved_pages: dict[uuid.UUID, list[dict[str, Any]]] = {}
-    for snap in await all_of(LinkSnapshot, LinkSnapshot.position):
-        if snap.status != "ready":
+    snapshots = {s.id: s for s in await all_of(LinkSnapshot)}
+    for link in await all_of(ThoughtLink, ThoughtLink.position):
+        snap = snapshots.get(link.link_id)
+        if snap is None or snap.status != "ready":
             continue
-        saved_pages.setdefault(snap.thought_id, []).append(
+        saved_pages.setdefault(link.thought_id, []).append(
             {
-                "url": snap.url,
+                "url": link.url,
                 "final_url": snap.final_url,
                 "site_name": snap.site_name,
                 "title": snap.title,
@@ -705,6 +708,7 @@ async def purge_all(db: AsyncSession, owner_id: uuid.UUID) -> dict[str, int]:
     counts = {}
     await db.execute(update(Thought).where(Thought.owner_id == owner_id).values(parent_id=None))
     for model in (
+        ThoughtLink,
         LinkSnapshot,
         ThoughtRelation,
         ThoughtEmbedding,

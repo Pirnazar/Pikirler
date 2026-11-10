@@ -7654,6 +7654,78 @@
         }
       }
     },
+    "/api/v1/pikirler/links/media-health": {
+      "get": {
+        "tags": [
+          "links"
+        ],
+        "summary": "Media Health",
+        "description": "Is the video downloader still working? (yt-dlp version, recent downloads)",
+        "operationId": "media_health_api_v1_pikirler_links_media_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaHealth"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF failure or missing scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or owned by someone else)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Magic Word required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/pikirler/links/{link_id}": {
       "get": {
         "tags": [
@@ -7846,6 +7918,191 @@
             "description": "Successful Response",
             "content": {
               "image/jpeg": {}
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF failure or missing scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or owned by someone else)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Magic Word required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pikirler/links/{link_id}/seen": {
+      "post": {
+        "tags": [
+          "links"
+        ],
+        "summary": "Mark Seen",
+        "description": "The owner looked at the copy: its comments stop being \"new\".",
+        "operationId": "mark_seen_api_v1_pikirler_links__link_id__seen_post",
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Link Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "CSRF failure or missing scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found (or owned by someone else)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "423": {
+            "description": "Magic Word required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pikirler/links/{link_id}/summary": {
+      "post": {
+        "tags": [
+          "links"
+        ],
+        "summary": "Summarize Link",
+        "description": "A short AI summary of the saved text (needs the AI to be set up and,\nfor an external provider, the owner's consent). Kept and reused.",
+        "operationId": "summarize_link_api_v1_pikirler_links__link_id__summary_post",
+        "parameters": [
+          {
+            "name": "link_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Link Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/SummaryRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkSummary"
+                }
+              }
             }
           },
           "401": {
@@ -9036,6 +9293,17 @@
             "description": "Kept comments deleted on the site",
             "default": 0
           },
+          "new_comment_count": {
+            "type": "integer",
+            "title": "New Comment Count",
+            "description": "Comments the owner has not seen yet",
+            "default": 0
+          },
+          "has_summary": {
+            "type": "boolean",
+            "title": "Has Summary",
+            "default": false
+          },
           "synced_at": {
             "anyOf": [
               {
@@ -9186,6 +9454,16 @@
             },
             "type": "array",
             "title": "Comments"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LinkSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -9418,6 +9696,17 @@
             "description": "Kept comments deleted on the site",
             "default": 0
           },
+          "new_comment_count": {
+            "type": "integer",
+            "title": "New Comment Count",
+            "description": "Comments the owner has not seen yet",
+            "default": 0
+          },
+          "has_summary": {
+            "type": "boolean",
+            "title": "Has Summary",
+            "default": false
+          },
           "synced_at": {
             "anyOf": [
               {
@@ -9576,6 +9865,49 @@
         ],
         "title": "LinkStatus"
       },
+      "LinkSummary": {
+        "properties": {
+          "gist": {
+            "type": "string",
+            "title": "Gist"
+          },
+          "points": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Points"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "gist"
+        ],
+        "title": "LinkSummary"
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -9640,6 +9972,96 @@
           "password"
         ],
         "title": "MagicWordUpdate"
+      },
+      "MediaAttempt": {
+        "properties": {
+          "site": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site"
+          },
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "at"
+        ],
+        "title": "MediaAttempt"
+      },
+      "MediaHealth": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          },
+          "ytdlp_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ytdlp Version"
+          },
+          "refreshed": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Refreshed",
+            "description": "When yt-dlp was last refreshed"
+          },
+          "recent": {
+            "items": {
+              "$ref": "#/components/schemas/MediaAttempt"
+            },
+            "type": "array",
+            "title": "Recent"
+          },
+          "broken": {
+            "type": "boolean",
+            "title": "Broken",
+            "description": "Recent downloads keep failing: yt-dlp probably needs an update"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled",
+          "broken"
+        ],
+        "title": "MediaHealth"
       },
       "MediaOut": {
         "properties": {
@@ -10711,6 +11133,12 @@
             "title": "Deleted At",
             "description": "Set when the comment disappeared from the site"
           },
+          "is_new": {
+            "type": "boolean",
+            "title": "Is New",
+            "description": "Appeared since the owner last looked",
+            "default": false
+          },
           "replies": {
             "items": {
               "$ref": "#/components/schemas/SavedComment"
@@ -11187,6 +11615,28 @@
           "summary"
         ],
         "title": "Stage"
+      },
+      "SummaryRequest": {
+        "properties": {
+          "language": {
+            "type": "string",
+            "enum": [
+              "tk",
+              "ru",
+              "en"
+            ],
+            "title": "Language",
+            "default": "ru"
+          },
+          "refresh": {
+            "type": "boolean",
+            "title": "Refresh",
+            "description": "Make a new one even if one exists",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "SummaryRequest"
       },
       "SummaryResponse": {
         "properties": {

@@ -46,7 +46,7 @@ export function openReader(id: string | null) {
 
 /** Re-reads the thought every few seconds while one of its pages is being saved. */
 function usePollWhilePending(thought: Thought) {
-  const pending = (thought.links ?? []).some((l) => l.status === "pending");
+  const pending = (thought.links ?? []).some((l) => l.status === "pending" || l.media_status === "pending");
   useEffect(() => {
     if (!pending) return;
     let tries = 0;
@@ -54,7 +54,7 @@ function usePollWhilePending(thought: Thought) {
       tries += 1;
       try {
         const next = await get<Thought>(`/thoughts/${thought.id}`);
-        if (!(next.links ?? []).some((l) => l.status === "pending") || tries > 60) {
+        if (!(next.links ?? []).some((l) => l.status === "pending" || l.media_status === "pending") || tries > 120) {
           window.clearInterval(timer);
           emit({ type: "updated", thought: next });
         }
@@ -76,6 +76,8 @@ export function linkError(t: I18n["t"], code?: string | null): string {
       return t("lk_unsupported");
     case "link_too_large":
       return t("lk_too_large");
+    case "link_login_required":
+      return t("lk_login_required");
     case "link_dns":
     case "link_timeout":
     case "link_unreachable":
@@ -106,7 +108,9 @@ export function SavedLinks({ thought, large }: { thought: Thought; large?: boole
   return (
     <div className={"pk-saved" + (large ? " large" : "")} onClick={(e) => e.stopPropagation()}>
       {links.map((l) =>
-        l.status === "ready" && l.kind === "post" ? (
+        l.status === "ready" && l.site_name === "YouTube" ? (
+          <VideoCard key={l.id} l={l} />
+        ) : l.status === "ready" && l.kind === "post" ? (
           <QuoteCard key={l.id} l={l} />
         ) : l.status === "ready" ? (
           <button key={l.id} type="button" className="pk-saved-card" onClick={() => openReader(l.id)} aria-label={t("lk_read", { title: l.title ?? host(l.url) })}>
@@ -174,7 +178,8 @@ function QuoteCard({ l }: { l: SavedLink }) {
         <span className="pk-quote-site">{l.site_name || host(l.url)}</span>
       </div>
       <p className="pk-quote-text">{l.post_text}</p>
-      {l.cover_url && <img className="pk-quote-img" src={l.cover_url} alt="" loading="lazy" />}
+      {l.media ? <LinkVideo l={l} /> : l.cover_url && <img className="pk-quote-img" src={l.cover_url} alt="" loading="lazy" />}
+      <MediaState l={l} />
       <div className="pk-quote-foot">
         {l.published_at && <time dateTime={l.published_at}>{full(l.published_at)}</time>}
         {l.edited_at && <span>· {t("lk_edited")}</span>}
@@ -185,6 +190,72 @@ function QuoteCard({ l }: { l: SavedLink }) {
         <a href={l.url} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()}>{t("lk_open_original")} ↗</a>
       </div>
     </blockquote>
+  );
+}
+
+const clock = (sec?: number | null) => {
+  if (!sec) return "";
+  const h = Math.floor(sec / 3600);
+  const m = Math.floor((sec % 3600) / 60);
+  const ss = String(Math.floor(sec % 60)).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+};
+
+/** The downloaded video, played from Pikirler's own storage. */
+function LinkVideo({ l, large }: { l: SavedLink; large?: boolean }) {
+  if (!l.media) return null;
+  const poster = l.media.thumbnail_url ?? l.cover_url ?? undefined;
+  return (
+    <video className={"pk-link-video" + (large ? " large" : "")} controls preload="metadata" playsInline
+      src={l.media.content_url} poster={poster} onClick={(e) => e.stopPropagation()} />
+  );
+}
+
+function mediaError(t: I18n["t"], code?: string | null): string {
+  switch (code) {
+    case "media_login_required":
+      return t("lk_media_login");
+    case "media_too_large":
+      return t("lk_media_too_large");
+    case "media_too_long":
+      return t("lk_media_too_long");
+    case "media_unavailable":
+      return t("lk_media_unavailable");
+    default:
+      return t("lk_media_failed");
+  }
+}
+
+function MediaState({ l }: { l: SavedLink }) {
+  const { t } = useI18n();
+  if (l.media_status === "pending") return <span className="pk-media-state">{t("lk_media_pending")}</span>;
+  if (l.media_status === "failed") return <span className="pk-media-state failed">{mediaError(t, l.media_error)}</span>;
+  return null;
+}
+
+/** A YouTube video: title, channel, the video itself, the start of the description. */
+function VideoCard({ l }: { l: SavedLink }) {
+  const { t } = useI18n();
+  return (
+    <div className="pk-video-card">
+      <div className="pk-saved-site">
+        {[l.site_name, byline(l), day(l.published_at), clock(l.duration_seconds)].filter(Boolean).join(" · ")}
+      </div>
+      <button type="button" className="pk-video-title" onClick={() => openReader(l.id)}>{l.title || host(l.url)}</button>
+      {l.media ? <LinkVideo l={l} /> : l.cover_url && (
+        <button type="button" className="pk-video-poster" onClick={() => openReader(l.id)} aria-label={t("lk_read", { title: l.title ?? "" })}>
+          <img src={l.cover_url} alt="" loading="lazy" />
+        </button>
+      )}
+      <MediaState l={l} />
+      {l.excerpt && <p className="pk-saved-excerpt">{l.excerpt}</p>}
+      <div className="pk-quote-foot">
+        <button type="button" className="pk-link-btn" onClick={() => openReader(l.id)}>{t("lk_description")}</button>
+        {l.source_deleted_at && <span className="pk-gone-badge">{t("lk_source_gone")}</span>}
+        <span style={{ flex: 1 }} />
+        <a href={l.url} target="_blank" rel="noopener noreferrer">{t("lk_open_original")} ↗</a>
+      </div>
+    </div>
   );
 }
 
@@ -283,13 +354,18 @@ export function Reader() {
                 {page.edited_at && <span>{t("lk_edited_on", { date: full(page.edited_at) })}</span>}
                 {page.reading_minutes && page.kind !== "post" ? <span>{t("lk_minutes", { n: page.reading_minutes })}</span> : null}
               </div>
-              {page.kind !== "post" && page.cover_url && <img className="pk-reader-cover" src={page.cover_url} alt="" />}
+              {page.media ? (
+                <LinkVideo l={page} large />
+              ) : (
+                page.kind !== "post" && page.cover_url && <img className="pk-reader-cover" src={page.cover_url} alt="" />
+              )}
+              <MediaState l={page} />
               {paragraphs.length ? (
                 <div className={"pk-reader-text" + (page.kind === "post" ? " post" : "")}>{paragraphs.map((p, i) => <p key={i}>{p}</p>)}</div>
               ) : (
                 <p className="pk-muted">{page.excerpt || t("lk_no_text")}</p>
               )}
-              {page.kind === "post" && page.cover_url && <img className="pk-reader-cover" src={page.cover_url} alt="" />}
+              {page.kind === "post" && !page.media && page.cover_url && <img className="pk-reader-cover" src={page.cover_url} alt="" />}
               {page.comment_count !== null && page.comment_count !== undefined && (
                 <section className="pk-reader-comments" aria-label={t("lk_comments_title")}>
                   <h2>

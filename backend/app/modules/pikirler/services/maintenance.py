@@ -15,6 +15,7 @@ from app.modules.pikirler.models import (
     Attachment,
     AuthSession,
     Job,
+    LinkSnapshot,
     Thought,
     ThoughtAttachment,
     VoiceTranscription,
@@ -51,6 +52,7 @@ async def cleanup_media(db: AsyncSession, batch: int = 500) -> dict[str, int]:
         Attachment.uploaded_at < now - ORPHAN_GRACE,
         ~exists().where(ThoughtAttachment.attachment_id == Attachment.id),
         ~exists().where(VoiceTranscription.attachment_id == Attachment.id),
+        ~exists().where(LinkSnapshot.media_attachment_id == Attachment.id),
     )
     rows = list(
         (

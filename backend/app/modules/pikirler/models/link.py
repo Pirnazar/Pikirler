@@ -51,6 +51,14 @@ class LinkSnapshot(Base):
     excerpt: Mapped[str | None] = mapped_column(Text)
     content_text: Mapped[str | None] = mapped_column(Text)
     word_count: Mapped[int | None] = mapped_column(Integer)
+    duration_seconds: Mapped[int | None] = mapped_column(Integer)
+    # The downloaded video (YouTube, TikTok, Instagram). ``media_status`` is
+    # null where nothing is downloaded, else pending / ready / failed.
+    media_attachment_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("attachments.id", ondelete="SET NULL")
+    )
+    media_status: Mapped[str | None] = mapped_column(String(16))
+    media_error: Mapped[str | None] = mapped_column(String(64))
     cover_key: Mapped[str | None] = mapped_column(Text)
     # Comments (Teswirler only), as a tree kept in step with the site:
     # [{id, author, username, text, quote, created_at, likes, image_url,

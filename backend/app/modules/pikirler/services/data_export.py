@@ -106,6 +106,9 @@ async def build_export(db: AsyncSession, owner_id: uuid.UUID) -> dict[str, Any]:
                 "edited_at": _iso(snap.edited_at),
                 "fetched_at": _iso(snap.fetched_at),
                 "text": snap.content_text,
+                "media_attachment_id": str(snap.media_attachment_id)
+                if snap.media_attachment_id
+                else None,
                 "comments": snap.comments or [],
             }
         )

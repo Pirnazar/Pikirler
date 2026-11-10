@@ -1865,14 +1865,37 @@ export interface components {
             status: components["schemas"]["LinkStatus"];
             /** Error Code */
             error_code?: string | null;
+            /**
+             * Kind
+             * @description post: a short post (Teswirler pikir), shown as a quote
+             * @default article
+             * @enum {string}
+             */
+            kind: "article" | "post";
             /** Site Name */
             site_name?: string | null;
             /** Title */
             title?: string | null;
             /** Author */
             author?: string | null;
+            /** Author Username */
+            author_username?: string | null;
+            /** Author Url */
+            author_url?: string | null;
             /** Published At */
             published_at?: string | null;
+            /** Edited At */
+            edited_at?: string | null;
+            /**
+             * Comment Count
+             * @description Saved comments incl. replies; null when the site has none
+             */
+            comment_count?: number | null;
+            /**
+             * Post Text
+             * @description Full text of a short post
+             */
+            post_text?: string | null;
             /** Excerpt */
             excerpt?: string | null;
             /**
@@ -1891,6 +1914,8 @@ export interface components {
              * @default
              */
             text: string;
+            /** Comments */
+            comments?: components["schemas"]["SavedComment"][];
         };
         /**
          * LinkOut
@@ -1909,14 +1934,37 @@ export interface components {
             status: components["schemas"]["LinkStatus"];
             /** Error Code */
             error_code?: string | null;
+            /**
+             * Kind
+             * @description post: a short post (Teswirler pikir), shown as a quote
+             * @default article
+             * @enum {string}
+             */
+            kind: "article" | "post";
             /** Site Name */
             site_name?: string | null;
             /** Title */
             title?: string | null;
             /** Author */
             author?: string | null;
+            /** Author Username */
+            author_username?: string | null;
+            /** Author Url */
+            author_url?: string | null;
             /** Published At */
             published_at?: string | null;
+            /** Edited At */
+            edited_at?: string | null;
+            /**
+             * Comment Count
+             * @description Saved comments incl. replies; null when the site has none
+             */
+            comment_count?: number | null;
+            /**
+             * Post Text
+             * @description Full text of a short post
+             */
+            post_text?: string | null;
             /** Excerpt */
             excerpt?: string | null;
             /**
@@ -2349,6 +2397,30 @@ export interface components {
              * @description When given, the restore fails on a concurrent edit.
              */
             expected_version?: number | null;
+        };
+        /** SavedComment */
+        SavedComment: {
+            /** Id */
+            id?: string | null;
+            /** Author */
+            author?: string | null;
+            /** Username */
+            username?: string | null;
+            /** Author Url */
+            author_url?: string | null;
+            /** Text */
+            text: string;
+            /** Quote */
+            quote?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /**
+             * Likes
+             * @default 0
+             */
+            likes: number;
+            /** Replies */
+            replies?: components["schemas"]["SavedComment"][];
         };
         /** SearchFilters */
         SearchFilters: {

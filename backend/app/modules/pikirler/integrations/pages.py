@@ -35,18 +35,27 @@ TESWIRLER_RESERVED = {
 @dataclass
 class Page:
     final_url: str
+    # "article" (has a title, shown as a card) or "post" (a short post such as
+    # a Teswirler pikir, shown as a quote).
+    kind: str = "article"
     site_name: str | None = None
     title: str | None = None
     author: str | None = None
+    author_username: str | None = None
     published_at: datetime | None = None
+    edited_at: datetime | None = None
     text: str = ""
     excerpt: str | None = None
     image_url: str | None = None
+    # Teswirler only: every comment with its replies (None = not available).
+    comments: list[dict[str, Any]] | None = None
+    comment_count: int | None = None
 
     def finish(self) -> Page:
         self.text = tidy(self.text)[:MAX_TEXT_CHARS]
         self.title = _clean(self.title, 1000)
         self.author = _clean(self.author, 300)
+        self.author_username = _clean(self.author_username, 200)
         self.site_name = _clean(self.site_name, 200)
         excerpt = _clean(self.excerpt, 2000) or (self.text[:EXCERPT_CHARS] if self.text else None)
         if excerpt and len(excerpt) > EXCERPT_CHARS:
@@ -147,20 +156,35 @@ def teswirler_api_path(url: str) -> str | None:
     return None
 
 
+def _person(value: Any) -> tuple[str | None, str | None]:
+    """(display name, username) of a Teswirler author object."""
+    person: dict[str, Any] = value if isinstance(value, dict) else {}
+    username = person.get("username") if isinstance(person.get("username"), str) else None
+    name = person.get("name") if isinstance(person.get("name"), str) else None
+    return name or username, username
+
+
 def _teswirler_page(url: str, api_path: str, data: dict[str, Any]) -> Page:
-    raw_author = data.get("author")
-    author: dict[str, Any] = raw_author if isinstance(raw_author, dict) else {}
-    name = author.get("name") or author.get("username")
+    name, username = _person(data.get("author"))
     images = data.get("images")
     if api_path.startswith("/blogs/"):
         raw_body = data.get("body")
         body = raw_body if isinstance(raw_body, str) else ""
+        published = _date(data.get("publishedAt") or data.get("createdAt"))
+        updated = _date(data.get("updatedAt"))
+        edited = (
+            updated
+            if updated and published and (updated - published).total_seconds() > 60
+            else None
+        )
         return Page(
             final_url=url,
             site_name="Teswirler",
             title=data.get("title"),
             author=name,
-            published_at=_date(data.get("publishedAt") or data.get("createdAt")),
+            author_username=username,
+            published_at=published,
+            edited_at=edited,
             text=html_to_text(body),
             excerpt=data.get("excerpt"),
             image_url=data.get("coverImage") if isinstance(data.get("coverImage"), str) else None,
@@ -170,12 +194,19 @@ def _teswirler_page(url: str, api_path: str, data: dict[str, Any]) -> Page:
     first_image = images[0] if isinstance(images, list) and images else None
     if isinstance(first_image, dict):
         first_image = first_image.get("url")
+    created = _date(data.get("createdAt"))
+    edited = _date(data.get("updatedAt"))
     return Page(
         final_url=url,
+        kind="post",
         site_name="Teswirler",
         title=None,  # a pikir has no title: the first line is used
         author=name,
-        published_at=_date(data.get("createdAt")),
+        author_username=username,
+        published_at=created,
+        edited_at=edited
+        if edited and created and (edited - created).total_seconds() > 60
+        else None,
         text=content,
         image_url=first_image if isinstance(first_image, str) else None,
     )
@@ -195,7 +226,91 @@ async def _from_teswirler(url: str, api_path: str) -> Page | None:
         return None
     if not isinstance(data, dict):
         return None
-    return _teswirler_page(url, api_path, data)
+    page = _teswirler_page(url, api_path, data)
+    item_id = data.get("id")
+    if isinstance(item_id, str) and item_id:
+        kind = "blogs" if api_path.startswith("/blogs/") else "pikirler"
+        try:
+            page.comments = await _teswirler_comments(f"{api}/{kind}/{quote(item_id, safe='')}")
+            page.comment_count = _count(page.comments)
+        except web.FetchError:
+            page.comments = None  # the article is still saved, just without comments
+    return page
+
+
+COMMENT_PAGE = 50  # Teswirler refuses larger pages
+MAX_COMMENTS = 2000
+MAX_COMMENT_REQUESTS = 300
+MAX_REPLY_DEPTH = 4
+
+
+def _count(comments: list[dict[str, Any]]) -> int:
+    return sum(1 + _count(c.get("replies") or []) for c in comments)
+
+
+async def _teswirler_comments(base: str) -> list[dict[str, Any]]:
+    """Every comment of an article or pikir, oldest first, with nested replies."""
+    budget = {"requests": MAX_COMMENT_REQUESTS, "comments": MAX_COMMENTS}
+
+    async def page_of(path: str) -> list[dict[str, Any]]:
+        rows: list[dict[str, Any]] = []
+        skip = 0
+        while budget["requests"] > 0 and budget["comments"] > 0:
+            budget["requests"] -= 1
+            got = await web.fetch(
+                f"{path}?skip={skip}&take={COMMENT_PAGE}",
+                kinds=("application/json",),
+                max_bytes=get_settings().link_max_page_bytes,
+                accept="application/json",
+            )
+            try:
+                data = json.loads(got.body).get("data")
+            except (ValueError, AttributeError):
+                break
+            items = data if isinstance(data, list) else (data or {}).get("items")
+            if not isinstance(items, list):
+                break
+            rows.extend(i for i in items if isinstance(i, dict))
+            budget["comments"] -= len(items)
+            more = data.get("hasMore") if isinstance(data, dict) else len(items) >= COMMENT_PAGE
+            if not more or not items:
+                break
+            skip += len(items)
+        return rows
+
+    async def tree(path: str, depth: int) -> list[dict[str, Any]]:
+        out: list[dict[str, Any]] = []
+        for raw in await page_of(path):
+            name, username = _person(raw.get("author"))
+            comment_id = raw.get("id")
+            quote_text = raw.get("quote")
+            replies: list[dict[str, Any]] = []
+            if (
+                isinstance(comment_id, str)
+                and isinstance(raw.get("repliesCount"), int)
+                and raw["repliesCount"] > 0
+                and depth < MAX_REPLY_DEPTH
+            ):
+                replies = await tree(
+                    f"{base}/comments/{quote(comment_id, safe='')}/replies", depth + 1
+                )
+            created = _date(raw.get("createdAt"))
+            out.append(
+                {
+                    "id": str(comment_id) if comment_id else None,
+                    "author": _clean(name, 300),
+                    "username": _clean(username, 200),
+                    "text": tidy(str(raw.get("content") or ""))[:20_000],
+                    "quote": tidy(quote_text)[:2000] if isinstance(quote_text, str) else None,
+                    "created_at": created.isoformat() if created else None,
+                    "likes": raw.get("likesCount") if isinstance(raw.get("likesCount"), int) else 0,
+                    "replies": replies,
+                }
+            )
+        out.sort(key=lambda c: c["created_at"] or "")
+        return out
+
+    return await tree(f"{base}/comments", 0)
 
 
 # --- any other site ---------------------------------------------------------------

@@ -30,7 +30,7 @@ from app.modules.pikirler.models import (
 from app.modules.pikirler.models.enums import ProcessingStatus, RevisionSource, ThoughtStatus
 from app.modules.pikirler.repositories import thoughts as repo
 from app.modules.pikirler.schemas.thoughts import ThoughtCreate, ThoughtUpdate
-from app.modules.pikirler.services import crosspost, jobs, tags
+from app.modules.pikirler.services import crosspost, jobs, links, tags
 from app.modules.pikirler.services.auth import Principal
 
 EMBED_JOB = "embed_thought"
@@ -173,7 +173,8 @@ async def transcripts_for(
 async def refresh_search_documents(
     db: AsyncSession, owner_id: uuid.UUID, thought_ids: Sequence[uuid.UUID]
 ) -> None:
-    """Rebuild search_document from content + tag names + voice transcripts."""
+    """Rebuild search_document from content, tag names, voice transcripts and
+    the text of saved linked pages."""
     ids = list(dict.fromkeys(thought_ids))
     if not ids:
         return
@@ -197,9 +198,13 @@ async def refresh_search_documents(
     ).all():
         tag_names.setdefault(tid, []).append(name)
     transcripts = await transcripts_for(db, ids)
+    pages = await links.search_texts(db, ids)
     for tid, content in contents.items():
         doc = build_search_document(
-            content, " ".join(tag_names.get(tid, [])), "\n".join(transcripts.get(tid, []))
+            content,
+            " ".join(tag_names.get(tid, [])),
+            "\n".join(transcripts.get(tid, [])),
+            pages.get(tid),
         )
         await db.execute(update(Thought).where(Thought.id == tid).values(search_document=doc))
 
@@ -282,6 +287,7 @@ async def create(
     await tags.sync_thought_tags(db, thought, data.tags)
     await _set_projects(db, thought, project_ids)
     await _set_attachments(db, thought, attachment_ids)
+    await links.sync(db, thought)
     db.add(
         ThoughtRevision(
             owner_id=owner_id,
@@ -402,6 +408,8 @@ async def update_thought(
         await _set_projects(db, current, project_ids)
     if attachment_ids is not None:
         await _set_attachments(db, current, attachment_ids)
+    if "content" in values:
+        await links.sync(db, current)
     await refresh_search_documents(db, owner_id, [current.id])
     if "content" in values or data.tags is not None:
         await _queue_embedding(db, current)

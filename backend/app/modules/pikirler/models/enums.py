@@ -123,6 +123,12 @@ class CrosspostStatus(StrEnum):
     unknown = "unknown"  # the request may have reached the site; never resent automatically
 
 
+class LinkStatus(StrEnum):
+    pending = "pending"
+    ready = "ready"
+    failed = "failed"
+
+
 def check_in(column: str, enum: type[StrEnum]) -> str:
     values = ", ".join(f"'{v.value}'" for v in enum)
     return f"{column} IN ({values})"

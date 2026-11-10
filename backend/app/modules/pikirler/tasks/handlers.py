@@ -70,6 +70,10 @@ def register_all() -> None:
     from app.modules.pikirler.services import crosspost
 
     register(crosspost.CROSSPOST_JOB, crosspost.run_job)
+    from app.modules.pikirler.services import links
+
+    register(links.FETCH_JOB, links.run_job, on_dead=links.gave_up)
+    register(links.DELETE_COVERS_JOB, links.delete_covers_job)
     from app.modules.pikirler.services import data_export
 
     register(data_export.EXPORT_JOB, data_export.run_export_job)

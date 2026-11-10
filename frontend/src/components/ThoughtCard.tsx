@@ -10,6 +10,7 @@ import { I, Icon } from "../lib/icons";
 import { Insights } from "./Insights";
 import { Crossposts } from "./Crossposts";
 import { ThoughtMedia } from "./Media";
+import { SavedLinks, textWithoutSavedLinks } from "./SavedLinks";
 
 export function ThoughtCard({ t, fresh }: { t: Thought; fresh?: boolean }) {
   const app = useApp();
@@ -18,8 +19,9 @@ export function ThoughtCard({ t, fresh }: { t: Thought; fresh?: boolean }) {
   const [menu, setMenu] = useState(false);
   const [ai, setAi] = useState(false);
   const [pop, setPop] = useState(false);
-  const long = t.content.length > 300;
-  const text = long && !expanded ? t.content.slice(0, 270).trimEnd() + "…" : t.content;
+  const shown = textWithoutSavedLinks(t.content, t.links ?? []);
+  const long = shown.length > 300;
+  const text = long && !expanded ? shown.slice(0, 270).trimEnd() + "…" : shown;
   const cat = t.thought_type !== "thought" ? typeLabel(tr, t.thought_type) : "";
   const proj = t.projects[0];
   const inThread = !!t.parent_id || (t.reply_count ?? 0) > 0;
@@ -52,11 +54,12 @@ export function ThoughtCard({ t, fresh }: { t: Thought; fresh?: boolean }) {
           {t.status === "draft" && <span className="pk-muted" style={{ fontSize: 12 }}>· {tr("draft")}</span>}
           {t.is_pinned && <span className="pk-muted" style={{ fontSize: 12 }}>· {tr("pinned")}</span>}
         </div>
-        {t.content && <div className="pk-text">{text}</div>}
+        {shown && <div className="pk-text">{text}</div>}
         {long && (
           <button className="pk-more" onClick={stop(() => setExpanded((x) => !x))}>{expanded ? tr("show_less") : tr("read_more")}</button>
         )}
-        <ThoughtMedia attachments={t.attachments} text={t.content} />
+        <ThoughtMedia attachments={t.attachments} text={t.content} hasSavedLinks={(t.links ?? []).length > 0} />
+        <SavedLinks thought={t} />
         {(proj || t.tags.length > 0 || inThread) && (
           <div className="pk-meta">
             {proj && <button className="pk-proj-chip" onClick={stop(() => app.go("project", proj.id))}>{proj.name}</button>}

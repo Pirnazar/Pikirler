@@ -193,6 +193,7 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
   const expanded = focus || !!draft || items.length > 0 || !!replyTo;
   const statusText = uploading ? t("uploading") : failed ? t("upload_failed_remove") : !online ? t("offline_draft") : status;
   const detected = parseTags(draft);
+  const willSave = /https?:\/\/\S+\.\S+/i.test(draft) || items.some((p) => p.kind === "link");
   const xCut = toX && xText([draft.trim(), ...items.filter((p) => p.kind === "link").map((p) => p.url!)].filter(Boolean).join("\n\n")).cut;
 
   const share = (
@@ -312,6 +313,7 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
           </div>
         )}
         {expanded && share}
+        {expanded && willSave && <div className="pk-save-hint"><Icon d={I.bookmark} size="xs" /> {t("lk_will_save")}</div>}
         <div className="pk-toolbar">
           <button className="pk-tool" title={t("tool_image")} aria-label={t("attach_image")} onClick={() => imageIn.current?.click()}><Icon d={I.image} /></button>
           <button className="pk-tool" title={t("kind_video")} aria-label={t("attach_video")} onClick={() => videoIn.current?.click()}><Icon d={I.video} /></button>

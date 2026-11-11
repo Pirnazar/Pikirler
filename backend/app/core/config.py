@@ -83,6 +83,10 @@ class Settings(BaseSettings):
     # "task: search result | query: " and "title: none | text: ").
     embedding_query_prefix: str = ""
     embedding_document_prefix: str = ""
+    # Separate local encoder for the media corpus; never changes note AI consent.
+    media_encoder_url: str = ""
+    media_encoder_model: str = "intfloat/multilingual-e5-small:int8:v1"
+    youtube_archive_owner_id: str = ""
 
     # --- LLM ----------------------------------------------------------------
     llm_provider: ProviderName = "disabled"

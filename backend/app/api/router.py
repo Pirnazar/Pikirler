@@ -5,11 +5,13 @@ from fastapi import APIRouter
 from app.api.v1 import (
     ai,
     auth,
+    cinema,
     crosspost,
     data,
     integrations,
     links,
     media,
+    media_search,
     memories,
     projects,
     relations,
@@ -20,6 +22,7 @@ from app.api.v1 import (
     timeline,
     topics,
     voice,
+    youtube_archive,
 )
 
 api_router = APIRouter()
@@ -34,6 +37,9 @@ api_router.include_router(relations.router)
 api_router.include_router(timeline.router)
 api_router.include_router(system.router)
 api_router.include_router(media.router)
+api_router.include_router(media_search.router)
+api_router.include_router(youtube_archive.router)
+api_router.include_router(cinema.router)
 api_router.include_router(voice.router)
 api_router.include_router(memories.router)
 api_router.include_router(ai.router)

@@ -2,6 +2,7 @@ import { translate } from "../i18n";
 import type { components } from "./schema";
 
 type S = components["schemas"];
+export type MediaQuoteSource = S["MediaQuoteSource"];
 export type Thought = S["ThoughtOut"];
 export type Attachment = S["AttachmentRef"];
 export type Session = S["SessionState"];

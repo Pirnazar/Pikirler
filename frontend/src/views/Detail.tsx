@@ -12,6 +12,7 @@ import { Insights } from "../components/Insights";
 import { Crossposts } from "../components/Crossposts";
 import { SavedLinks } from "../components/SavedLinks";
 import { ThoughtMedia, useScrollIntoView } from "../components/Media";
+import { MediaCitation } from "../components/MediaQuote";
 import { full, short, snip } from "../lib/format";
 import { I, Icon } from "../lib/icons";
 
@@ -174,6 +175,7 @@ export function DetailView({ id }: { id: string }) {
                   </div>
                 ) : null}
                 <ThoughtMedia attachments={t.attachments} text={t.content} large hasSavedLinks={(t.links ?? []).length > 0} />
+                <MediaCitation quote={t.media_quote} />
                 <SavedLinks thought={t} large />
                 <div className="pk-meta" style={{ marginTop: 12 }}>
                   {t.projects.map((p) => <button key={p.id} className="pk-proj-chip" onClick={() => app.go("project", p.id)}>{p.name}</button>)}

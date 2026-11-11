@@ -920,6 +920,313 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/pikirler/media-search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Search */
+        post: operations["search_api_v1_pikirler_media_search_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/media-search/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Status */
+        get: operations["status_api_v1_pikirler_media_search_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/media-search/facets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Facets */
+        get: operations["facets_api_v1_pikirler_media_search_facets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/media-search/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh */
+        post: operations["refresh_api_v1_pikirler_media_search_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/media-search/quotes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Save Quote */
+        post: operations["save_quote_api_v1_pikirler_media_search_quotes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/youtube-archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Videos */
+        get: operations["list_videos_api_v1_pikirler_youtube_archive_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/youtube-archive/{video_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Video Detail */
+        get: operations["video_detail_api_v1_pikirler_youtube_archive__video_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/movies/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Catalog */
+        get: operations["catalog_api_v1_pikirler_movies_catalog_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/movies/quotes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Quotes */
+        get: operations["quotes_api_v1_pikirler_movies_quotes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/movies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Movies */
+        get: operations["list_movies_api_v1_pikirler_movies_get"];
+        put?: never;
+        /** Add Movie */
+        post: operations["add_movie_api_v1_pikirler_movies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/movies/{movie_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Detail */
+        get: operations["detail_api_v1_pikirler_movies__movie_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/movies/{movie_id}/preferences": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Preferences */
+        patch: operations["preferences_api_v1_pikirler_movies__movie_id__preferences_patch"];
+        trace?: never;
+    };
+    "/api/v1/pikirler/movies/{movie_id}/subtitles/auto": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Auto Subtitles */
+        post: operations["auto_subtitles_api_v1_pikirler_movies__movie_id__subtitles_auto_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/movies/{movie_id}/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh Movie */
+        post: operations["refresh_movie_api_v1_pikirler_movies__movie_id__refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/movies/{movie_id}/subtitles/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Subtitle Options */
+        get: operations["subtitle_options_api_v1_pikirler_movies__movie_id__subtitles_options_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/movies/{movie_id}/subtitles/fetch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fetch Subtitle */
+        post: operations["fetch_subtitle_api_v1_pikirler_movies__movie_id__subtitles_fetch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/movies/{movie_id}/subtitles/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Subtitle */
+        post: operations["upload_subtitle_api_v1_pikirler_movies__movie_id__subtitles_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pikirler/movies/{movie_id}/cues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cues */
+        get: operations["cues_api_v1_pikirler_movies__movie_id__cues_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/pikirler/voice/transcriptions": {
         parameters: {
             query?: never;
@@ -1676,6 +1983,16 @@ export interface components {
              */
             tags: string;
         };
+        /** Body_upload_subtitle_api_v1_pikirler_movies__movie_id__subtitles_upload_post */
+        Body_upload_subtitle_api_v1_pikirler_movies__movie_id__subtitles_upload_post: {
+            /** File */
+            file: string;
+            /**
+             * Language
+             * @default ru
+             */
+            language: string;
+        };
         /**
          * ContentFormat
          * @enum {string}
@@ -2267,6 +2584,45 @@ export interface components {
              */
             created_at: string;
         };
+        /**
+         * MediaQuoteSource
+         * @description Immutable, server-resolved attribution stored with a saved quotation.
+         */
+        MediaQuoteSource: {
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "cinema" | "passage" | "youtube_transcript" | "lyrics";
+            /** Reference */
+            reference: string;
+            /** Text */
+            text: string;
+            /** Title */
+            title: string;
+            /** Language */
+            language: string;
+            /** Url */
+            url: string;
+            /** Title En */
+            title_en?: string | null;
+            /** Year */
+            year?: string | number | null;
+            /** Start Ms */
+            start_ms?: number | null;
+            /** End Ms */
+            end_ms?: number | null;
+            /** Position */
+            position?: number | null;
+            /** Movie Id */
+            movie_id?: string | null;
+            /** Track Id */
+            track_id?: string | null;
+            /** Kind */
+            kind?: string | null;
+            /** Part */
+            part?: string | null;
+        };
         /** MonthlyRecap */
         MonthlyRecap: {
             /** Year */
@@ -2286,6 +2642,29 @@ export interface components {
             top_tags: components["schemas"]["TagCount"][];
             /** Highlights */
             highlights: components["schemas"]["ThoughtOut"][];
+        };
+        /** MovieCreate */
+        MovieCreate: {
+            /** Imdb Id */
+            imdb_id: string;
+            /**
+             * Query
+             * @default
+             */
+            query: string;
+        };
+        /** MoviePreferences */
+        MoviePreferences: {
+            /** Expected Version */
+            expected_version: number;
+            /** Watch Status */
+            watch_status?: ("unlisted" | "want" | "watched") | null;
+            /** Is Favorite */
+            is_favorite?: boolean | null;
+            /** User Rating */
+            user_rating?: number | null;
+            /** User Comment */
+            user_comment?: string | null;
         };
         /** Ok */
         Ok: {
@@ -2418,6 +2797,18 @@ export interface components {
              * @description Must be exactly "DELETE ALL MY THOUGHTS"
              */
             confirm: string;
+        };
+        /** Quote */
+        Quote: {
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "cinema" | "passage" | "youtube_transcript" | "lyrics";
+            /** Reference */
+            reference: string;
+            /** Position */
+            position?: number | null;
         };
         /** RandomMemory */
         RandomMemory: {
@@ -2650,6 +3041,45 @@ export interface components {
             /** Replies */
             replies?: components["schemas"]["SavedComment"][];
         };
+        /** Search */
+        Search: {
+            /** Query */
+            query: string;
+            /**
+             * Mode
+             * @default keyword
+             * @enum {string}
+             */
+            mode: "keyword" | "semantic" | "hybrid";
+            /**
+             * Kind
+             * @default
+             * @enum {string}
+             */
+            kind: "" | "movie" | "video" | "music" | "lyrics" | "unknown";
+            /**
+             * Language
+             * @default
+             */
+            language: string;
+            /**
+             * Genre
+             * @default
+             */
+            genre: string;
+            /** Year */
+            year?: number | null;
+            /**
+             * Offset
+             * @default 0
+             */
+            offset: number;
+            /**
+             * Limit
+             * @default 20
+             */
+            limit: number;
+        };
         /** SearchFilters */
         SearchFilters: {
             type?: components["schemas"]["ThoughtType"] | null;
@@ -2822,6 +3252,16 @@ export interface components {
             thought_id: string;
             /** Summary */
             summary: string;
+        };
+        /** SubtitleChoice */
+        SubtitleChoice: {
+            /**
+             * Language
+             * @default ru
+             */
+            language: string;
+            /** Provider Id */
+            provider_id: string;
         };
         /** SummaryRequest */
         SummaryRequest: {
@@ -2998,6 +3438,7 @@ export interface components {
         };
         /** ThoughtOut */
         ThoughtOut: {
+            media_quote?: components["schemas"]["MediaQuoteSource"] | null;
             /**
              * Id
              * Format: uuid
@@ -7272,6 +7713,636 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    search_api_v1_pikirler_media_search_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Search"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    status_api_v1_pikirler_media_search_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    facets_api_v1_pikirler_media_search_facets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    refresh_api_v1_pikirler_media_search_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    save_quote_api_v1_pikirler_media_search_quotes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Quote"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_videos_api_v1_pikirler_youtube_archive_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                kind?: string;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    video_detail_api_v1_pikirler_youtube_archive__video_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                video_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    catalog_api_v1_pikirler_movies_catalog_get: {
+        parameters: {
+            query: {
+                q: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    quotes_api_v1_pikirler_movies_quotes_get: {
+        parameters: {
+            query: {
+                q: string;
+                offset?: number;
+                limit?: number;
+                language?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_movies_api_v1_pikirler_movies_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                offset?: number;
+                limit?: number;
+                watch_status?: "" | "unlisted" | "want" | "watched";
+                favorite?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_movie_api_v1_pikirler_movies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MovieCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    detail_api_v1_pikirler_movies__movie_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                movie_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preferences_api_v1_pikirler_movies__movie_id__preferences_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                movie_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoviePreferences"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    auto_subtitles_api_v1_pikirler_movies__movie_id__subtitles_auto_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                movie_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_movie_api_v1_pikirler_movies__movie_id__refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                movie_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    subtitle_options_api_v1_pikirler_movies__movie_id__subtitles_options_get: {
+        parameters: {
+            query?: {
+                language?: string;
+            };
+            header?: never;
+            path: {
+                movie_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fetch_subtitle_api_v1_pikirler_movies__movie_id__subtitles_fetch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                movie_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubtitleChoice"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_subtitle_api_v1_pikirler_movies__movie_id__subtitles_upload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                movie_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_subtitle_api_v1_pikirler_movies__movie_id__subtitles_upload_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    cues_api_v1_pikirler_movies__movie_id__cues_get: {
+        parameters: {
+            query?: {
+                q?: string;
+                subtitle_id?: string | null;
+                offset?: number;
+                limit?: number;
+                around_ms?: number | null;
+            };
+            header?: never;
+            path: {
+                movie_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

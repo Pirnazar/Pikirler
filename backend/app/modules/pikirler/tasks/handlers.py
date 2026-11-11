@@ -63,6 +63,14 @@ async def reindex_embeddings(db: AsyncSession, payload: dict[str, Any]) -> dict[
 
 
 def register_all() -> None:
+    from app.modules.pikirler.services import media_corpus
+
+    register(media_corpus.SYNC_JOB, media_corpus.sync_corpus, on_dead=media_corpus.gave_up)
+    register(media_corpus.EMBED_JOB, media_corpus.embed_corpus, on_dead=media_corpus.gave_up)
+    from app.modules.pikirler.services import cinema
+
+    register(cinema.SUBTITLE_JOB, cinema.run_job, on_dead=cinema.gave_up)
+    register(cinema.METADATA_JOB, cinema.metadata_job, on_dead=cinema.metadata_gave_up)
     register(EMBED_JOB, embed_thought)
     register(voice.TRANSCRIBE_JOB, transcribe_audio, on_dead=transcription_gave_up)
     register(media.PROCESS_JOB, process_attachment)

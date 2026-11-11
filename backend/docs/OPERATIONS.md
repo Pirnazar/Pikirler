@@ -1,5 +1,16 @@
 # Эксплуатация
 
+## Медиа и локальная модель
+
+Настройка HDD, read-only снимка YouTube, owner UUID, encoder, миграций
+`0008`–`0011` и резервного копирования — в [MEDIA.md](MEDIA.md).
+В production compose появился сервис `media-encoder`: первый запуск скачивает
+и квантует модель, может требовать до 4 ГБ памяти. Сначала примените миграции,
+затем обновляйте API и worker. Проверяйте `ps` и логи worker/encoder; пустой
+`PIKIRLER_MEDIA_ENCODER_URL` оставляет поиск по словам без семантического режима.
+Архив YouTube требует отдельного бэкапа; PostgreSQL-бэкап включает кино,
+индекс, списки и цитаты. Экспорт заметок не заменяет эти копии.
+
 ## Production
 
 1. `.env.production` по образцу `.env.example`: `PIKIRLER_ENVIRONMENT=production`,

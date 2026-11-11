@@ -39,6 +39,13 @@ async def sync_links(ctx: dict[str, Any]) -> int:
         return await links.schedule_sync(db)
 
 
+async def sync_media(ctx: dict[str, Any]) -> int:
+    from app.modules.pikirler.services import media_corpus
+
+    async with get_database().sessionmaker() as db:
+        return await media_corpus.schedule(db)
+
+
 async def cleanup(ctx: dict[str, Any]) -> dict[str, Any]:
     async with get_database().sessionmaker() as db:
         result: dict[str, Any] = {}
@@ -75,6 +82,7 @@ class WorkerSettings:
         ),
         cron(cleanup, minute={17}, unique=True),
         cron(sync_links, minute=set(range(3, 60, 10)), unique=True),
+        cron(sync_media, minute=set(range(1, 60, 10)), unique=True),
     ]
     on_startup = startup
     on_shutdown = shutdown

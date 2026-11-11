@@ -14,7 +14,8 @@
 |---|---|
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | модули, схема БД, решения и их причины |
 | [docs/API.md](docs/API.md) | контракт: аутентификация, ошибки, пагинация, загрузка, TypeScript-типы |
-| [docs/openapi.json](docs/openapi.json) | OpenAPI 3.1 (73 пути), сгенерирован из кода |
+| [docs/openapi.json](docs/openapi.json) | OpenAPI 3.1, сгенерирован из кода |
+| [docs/MEDIA.md](docs/MEDIA.md) | архив YouTube, кино RU/EN, общий и локальный семантический поиск, цитаты, списки |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | деплой, бэкапы, сроки хранения, логи, Jemşit, ASR |
 | [docs/STATUS.md](docs/STATUS.md) | что реализовано и проверено, что нет |
 

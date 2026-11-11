@@ -8,7 +8,7 @@
 Типы генерируются из OpenAPI, вручную не пишутся:
 
 ```bash
-npx openapi-typescript@7 ./docs/openapi.json -o src/api/pikirler.d.ts
+npm --prefix ../frontend run gen:api
 ```
 
 Обновить спецификацию после изменения бэкенда:
@@ -21,11 +21,64 @@ docker compose run --rm -v "$PWD/docs:/srv/app/docs" api pikirler export-openapi
 
 ```ts
 import createClient from "openapi-fetch";
-import type { paths } from "./api/pikirler";
+import type { paths } from "./api/schema";
 
 const api = createClient<paths>({ baseUrl: "", credentials: "include" });
 const { data } = await api.GET("/api/v1/pikirler/timeline", { params: { query: { limit: 30 } } });
 ```
+
+## Медиа: YouTube, кино, поиск и цитаты
+
+Все пути ниже относительны к `/api/v1/pikirler`, требуют сессии аккаунта;
+изменяющие запросы и `POST /media-search` требуют CSRF. Сервисные токены
+не дают доступа к этим аккаунтным маршрутам. Чужой объект возвращает 404.
+
+| Метод и путь | Назначение |
+|---|---|
+| `GET /youtube-archive` | read-only снимок: `q`, `kind=video/music/unknown`, `offset`, `limit` (1–100, по умолчанию 30) |
+| `GET /youtube-archive/{video_id}` | метаданные, субтитры и текст песни со строками и временем в секундах |
+| `GET /movies/catalog?q=…` | внешний поиск названий, минимум 2 символа |
+| `GET /movies` | библиотека: `q`, `offset`, `limit` (1–100, по умолчанию 24), `watch_status`, `favorite` |
+| `POST /movies` | `{imdb_id, query?}`, добавление без дубля IMDb; фоновые метаданные и субтитры |
+| `GET /movies/{id}` | русские/английские метаданные, дорожки, статусы и личные списки |
+| `PATCH /movies/{id}/preferences` | `expected_version`, необязательные `watch_status`, `is_favorite`, `user_rating`, `user_comment`; 409 при конфликте |
+| `POST /movies/{id}/refresh` | обновление метаданных и недостающих субтитров, 202 |
+| `POST /movies/{id}/subtitles/auto` | очередь поиска недостающих языков, 202 |
+| `GET /movies/{id}/subtitles/options?language=ru` | выбор доступных дорожек |
+| `POST /movies/{id}/subtitles/fetch` | `{language, provider_id}`; сервер повторно проверяет вариант у провайдера |
+| `POST /movies/{id}/subtitles/upload` | multipart `file`, `language`; SRT/VTT до 5 МБ |
+| `GET /movies/{id}/cues` | `q`, `subtitle_id`, `offset`, `limit` (1–200, по умолчанию 50), `around_ms` для перехода к странице таймкода |
+| `GET /movies/quotes` | поиск по всем репликам: `q`, `language`, `offset`, `limit` (1–100, по умолчанию 30) |
+| `POST /media-search` | общий поиск, тело приведено ниже |
+| `GET /media-search/status` | состояние очереди, число фрагментов и готовых векторов |
+| `GET /media-search/facets` | доступные языки, жанры и годы владельца |
+| `POST /media-search/refresh` | инкрементальная переиндексация, 202 |
+| `POST /media-search/quotes` | сохранить цитату в заметки, ответ `{thought_id, already_saved}`, 201 |
+
+Пример общего поиска:
+
+```json
+{"query":"страх перед будущим","mode":"hybrid","kind":"movie","language":"ru","genre":"","year":2014,"offset":0,"limit":20}
+```
+
+`mode`: `keyword` (по умолчанию), `semantic`, `hybrid`; `kind`: пустая строка,
+`movie`, `video`, `music`, `lyrics`, `unknown`. Год необязателен. `limit` 1–50.
+Ответы поиска содержат `items`, `total` и исходные фрагменты с таймкодами в
+миллисекундах. Семантическая выдача ограничена лучшими кандидатами;
+`total` в этом режиме не является числом всех подходящих строк корпуса.
+
+Сохранение цитаты: `{source, reference, position?}`, где `source` — `cinema`
+(числовой ID реплики в виде строки), `passage` (UUID фрагмента индекса), `youtube_transcript` или
+`lyrics` (YouTube ID + номер строки `position`). Текст и владельца разрешает
+сервер. Для фрагмента индекса без `position` сохраняется весь фрагмент;
+с `position` — отдельная строка. В ответе мысли появляется `media_quote` со
+снимком текста, названий, языка, таймкода и ссылки. Повторный запрос возвращает
+ту же существующую заметку, не создавая дубль.
+
+`watch_status`: `unlisted`, `want`, `watched`; избранное независимо от списка.
+`user_rating`: 1–10 или `null` для очистки. Пустой или чужой owner UUID архива
+не открывает снимок: список возвращает `configured=false`, детали — 404.
+Схема хранения, источники и настройки — [MEDIA.md](MEDIA.md).
 
 ## Аутентификация в браузере
 

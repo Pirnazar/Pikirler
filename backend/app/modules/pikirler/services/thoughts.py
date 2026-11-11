@@ -240,6 +240,8 @@ async def create(
     *,
     parent: Thought | None = None,
     created_at: Any = None,
+    source_metadata: dict | None = None,
+    commit: bool = True,
 ) -> Thought:
     owner_id = principal.owner_id
     project_ids = await _validate_projects(db, owner_id, data.project_ids)
@@ -270,9 +272,10 @@ async def create(
         thought_type=data.thought_type.value,
         status=data.status.value,
         source=_source_for(principal, data.source),
-        source_metadata={"client": principal.extra["client"]}
-        if "client" in principal.extra
-        else {},
+        source_metadata={
+            **({"client": principal.extra["client"]} if "client" in principal.extra else {}),
+            **(source_metadata or {}),
+        },
         parent_id=parent.id if parent else None,
         thread_id=thread_id,
         is_bookmarked=data.is_bookmarked,
@@ -287,7 +290,8 @@ async def create(
     await tags.sync_thought_tags(db, thought, data.tags)
     await _set_projects(db, thought, project_ids)
     await _set_attachments(db, thought, attachment_ids)
-    await links.sync(db, thought)
+    if not source_metadata or "media_quote" not in source_metadata:
+        await links.sync(db, thought)
     db.add(
         ThoughtRevision(
             owner_id=owner_id,
@@ -301,7 +305,10 @@ async def create(
     await refresh_search_documents(db, owner_id, [thought.id])
     await _queue_embedding(db, thought)
     await crosspost.queue(db, principal, thought, [t.value for t in data.crosspost])
-    await db.commit()
+    if commit:
+        await db.commit()
+    else:
+        await db.flush()
     return await repo.get(db, owner_id, thought.id, load=True)
 
 

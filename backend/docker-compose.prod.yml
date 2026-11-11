@@ -32,6 +32,26 @@ x-app: &app
   networks: [internal]
 
 services:
+  media-encoder:
+    build:
+      context: ./media_encoder
+    image: pikirler-media-encoder:prod
+    restart: unless-stopped
+    environment:
+      ENCODER_THREADS: "4"
+    volumes:
+      - "${PIKIRLER_MEDIA_MODEL_DIR:-media_models}:/models"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 300s
+      retries: 10
+    deploy:
+      resources:
+        limits:
+          memory: 4g
+    networks: [internal]
   postgres:
     image: pgvector/pgvector:pg16
     restart: unless-stopped
@@ -98,6 +118,10 @@ services:
 
   api:
     <<: *app
+    group_add: ["${PIKIRLER_YOUTUBE_HOST_GID:-1001}"]
+    volumes:
+      - mediadata:/srv/data/media
+      - "${PIKIRLER_YOUTUBE_HOST_DIR:-youtube_archive}:/srv/youtube-archive:ro"
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
               "--proxy-headers", "--workers", "2", "--no-server-header"]
     depends_on:
@@ -110,6 +134,10 @@ services:
 
   worker:
     <<: *app
+    group_add: ["${PIKIRLER_YOUTUBE_HOST_GID:-1001}"]
+    volumes:
+      - mediadata:/srv/data/media
+      - "${PIKIRLER_YOUTUBE_HOST_DIR:-youtube_archive}:/srv/youtube-archive:ro"
     command: ["arq", "app.worker.WorkerSettings"]
     healthcheck:
       test: ["CMD", "arq", "--check", "app.worker.WorkerSettings"]
@@ -148,7 +176,9 @@ networks:
   internal:
 
 volumes:
+  media_models:
   pgdata:
   redisdata:
   mediadata:
+  youtube_archive:
   rustfsdata:

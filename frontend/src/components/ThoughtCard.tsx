@@ -10,6 +10,7 @@ import { I, Icon } from "../lib/icons";
 import { Insights } from "./Insights";
 import { Crossposts } from "./Crossposts";
 import { ThoughtMedia } from "./Media";
+import { MediaCitation } from "./MediaQuote";
 import { SavedLinks, textWithoutSavedLinks } from "./SavedLinks";
 
 export function ThoughtCard({ t, fresh }: { t: Thought; fresh?: boolean }) {
@@ -59,6 +60,7 @@ export function ThoughtCard({ t, fresh }: { t: Thought; fresh?: boolean }) {
           <button className="pk-more" onClick={stop(() => setExpanded((x) => !x))}>{expanded ? tr("show_less") : tr("read_more")}</button>
         )}
         <ThoughtMedia attachments={t.attachments} text={t.content} hasSavedLinks={(t.links ?? []).length > 0} />
+        <MediaCitation quote={t.media_quote} />
         <SavedLinks thought={t} />
         {(proj || t.tags.length > 0 || inThread) && (
           <div className="pk-meta">

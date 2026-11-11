@@ -3,7 +3,7 @@ import type { Project, Session, Settings, Tag, Thought } from "../api/client";
 
 export type View =
   | "home" | "mine" | "bookmarks" | "topics" | "projects" | "project"
-  | "memories" | "search" | "calendar" | "settings" | "detail";
+  | "memories" | "search" | "calendar" | "settings" | "detail" | "media";
 
 export interface Route {
   view: View;
@@ -11,7 +11,7 @@ export interface Route {
   arg?: string;
 }
 
-const VIEWS: View[] = ["home", "mine", "bookmarks", "topics", "projects", "project", "memories", "search", "calendar", "settings", "detail"];
+const VIEWS: View[] = ["home", "mine", "bookmarks", "topics", "projects", "project", "memories", "search", "calendar", "settings", "detail", "media"];
 
 export function parseHash(hash = window.location.hash): Route {
   const [view, ...rest] = hash.replace(/^#\/?/, "").split("/");

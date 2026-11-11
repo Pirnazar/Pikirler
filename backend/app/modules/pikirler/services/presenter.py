@@ -61,6 +61,7 @@ async def present(db: AsyncSession, thoughts: Sequence[Thought]) -> list[Thought
         tags = sorted(t.tag_links, key=lambda link: link.tag.normalized_name)
         out.append(
             ThoughtOut(
+                media_quote=t.source_metadata.get("media_quote"),
                 id=t.id,
                 content=t.content,
                 content_format=t.content_format,

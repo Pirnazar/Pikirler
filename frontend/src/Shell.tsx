@@ -18,6 +18,7 @@ import { TopicsView } from "./views/Topics";
 import { ProjectsView, ProjectView } from "./views/Projects";
 import { MemoriesView } from "./views/Memories";
 import { CalendarView } from "./views/Calendar";
+import { MediaView } from "./views/Media";
 import { SettingsView } from "./views/Settings";
 import type { AuthMode, LockMode } from "./screens/Lock";
 import { useI18n } from "./i18n";
@@ -25,11 +26,11 @@ import { useI18n } from "./i18n";
 const NAV = [
   ["home", "nav_home", I.home], ["mine", "nav_mine", I.user], ["bookmarks", "nav_bookmarks", I.bookmark],
   ["topics", "nav_topics", I.hash], ["projects", "nav_projects", I.folder], ["memories", "nav_memories", I.history],
-  ["search", "nav_search", I.spark], ["calendar", "nav_calendar", I.calendar], ["settings", "nav_settings", I.settings],
+  ["media", "nav_media", I.video], ["search", "nav_search", I.spark], ["calendar", "nav_calendar", I.calendar], ["settings", "nav_settings", I.settings],
 ] as const;
 const MOBILE_NAV = [
   ["home", "nav_home", I.home], ["search", "nav_search_short", I.search], ["new", "nav_new", I.plus],
-  ["memories", "nav_memories", I.history], ["mine", "nav_profile", I.user],
+  ["memories", "nav_memories", I.history], ["media", "nav_media", I.video], ["mine", "nav_profile", I.user],
 ] as const;
 
 export function Shell({ session, theme, setTheme, authMode, onLocked }: {
@@ -198,6 +199,7 @@ export function Shell({ session, theme, setTheme, authMode, onLocked }: {
       case "memories": return <MemoriesView />;
       case "search": return <SearchView key={route.arg ?? ""} initialQuery={route.arg} />;
       case "calendar": return <CalendarView key={route.arg ?? ""} month={route.arg} />;
+      case "media": return <MediaView />;
       case "settings": return <SettingsView />;
       case "detail": return <DetailView key={route.arg} id={route.arg ?? ""} />;
       default: return <HomeView />;
@@ -251,7 +253,7 @@ export function Shell({ session, theme, setTheme, authMode, onLocked }: {
         </aside>
 
         <main className="pk-main" ref={mainRef}>
-          <div className="pk-col">
+          <div className={route.view === "media" ? "pk-col pk-col-media" : "pk-col"}>
             {!online && (
               <div role="status" className="pk-banner">
                 <Icon d={I.offline} size="sm" />
@@ -262,7 +264,7 @@ export function Shell({ session, theme, setTheme, authMode, onLocked }: {
           </div>
         </main>
 
-        {!isMobile && <RightPanel />}
+        {!isMobile && route.view !== "media" && <RightPanel />}
 
         {isMobile && (
           <nav className="pk-mobile-nav" aria-label={t("main_nav")}>

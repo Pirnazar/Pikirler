@@ -38,6 +38,7 @@ ENV PIKIRLER_YTDLP_REFRESHED=$YTDLP_REFRESH
 COPY alembic.ini ./
 COPY app ./app
 COPY tests ./tests
+COPY scripts/media_embedding_bridge.py ./tools/media_embedding_bridge.py
 # /srv/data/media holds uploaded files with PIKIRLER_STORAGE_BACKEND=local; a
 # fresh named volume mounted there inherits this ownership.
 RUN mkdir -p /srv/data/media && chown -R app:app /srv/app /srv/data

@@ -108,7 +108,28 @@ class ThoughtUpdate(Schema):
     clear_occurred_at: bool = False
 
 
+class MediaQuoteSource(Schema):
+    """Immutable, server-resolved attribution stored with a saved quotation."""
+
+    source: Literal["cinema", "passage", "youtube_transcript", "lyrics"]
+    reference: str
+    text: str
+    title: str
+    language: str
+    url: str
+    title_en: str | None = None
+    year: str | int | None = None
+    start_ms: int | None = None
+    end_ms: int | None = None
+    position: int | None = None
+    movie_id: str | None = None
+    track_id: str | None = None
+    kind: str | None = None
+    part: str | None = None
+
+
 class ThoughtOut(Schema):
+    media_quote: MediaQuoteSource | None = None
     id: uuid.UUID
     content: str
     content_format: str

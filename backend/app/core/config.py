@@ -119,6 +119,10 @@ class Settings(BaseSettings):
     teswirler_api_url: str = "https://api.teswirler.com"
     teswirler_site_url: str = "https://teswirler.com"
     teswirler_timeout_seconds: float = 20.0
+    # makalam.com has no public API: Pikirler signs in through its web form once
+    # and keeps the encrypted cookie session, like the site's own pages do.
+    makalam_site_url: str = "https://makalam.com"
+    makalam_timeout_seconds: float = 20.0
 
     # --- saved web pages ------------------------------------------------------
     # Links in a thought are fetched once and kept as a readable copy (title,

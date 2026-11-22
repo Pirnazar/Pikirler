@@ -8272,20 +8272,30 @@
         }
       }
     },
-    "/api/v1/pikirler/crosspost/teswirler": {
+    "/api/v1/pikirler/crosspost/{target}": {
       "get": {
         "tags": [
           "crosspost"
         ],
-        "summary": "Teswirler Account",
-        "operationId": "teswirler_account_api_v1_pikirler_crosspost_teswirler_get",
+        "summary": "Site Account",
+        "operationId": "site_account_api_v1_pikirler_crosspost__target__get",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CrosspostTarget"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeswirlerAccountOut"
+                  "$ref": "#/components/schemas/SiteAccountOut"
                 }
               }
             }
@@ -8346,18 +8356,28 @@
         "tags": [
           "crosspost"
         ],
-        "summary": "Connect Teswirler",
-        "description": "Sign in to Teswirler once. The password is not stored.",
-        "operationId": "connect_teswirler_api_v1_pikirler_crosspost_teswirler_put",
+        "summary": "Connect Site",
+        "description": "Sign in to the site once. The password is not stored.",
+        "operationId": "connect_site_api_v1_pikirler_crosspost__target__put",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CrosspostTarget"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/TeswirlerConnect"
+                "$ref": "#/components/schemas/SiteConnect"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -8365,7 +8385,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeswirlerAccountOut"
+                  "$ref": "#/components/schemas/SiteAccountOut"
                 }
               }
             }
@@ -8426,15 +8446,25 @@
         "tags": [
           "crosspost"
         ],
-        "summary": "Disconnect Teswirler",
-        "operationId": "disconnect_teswirler_api_v1_pikirler_crosspost_teswirler_delete",
+        "summary": "Disconnect Site",
+        "operationId": "disconnect_site_api_v1_pikirler_crosspost__target__delete",
+        "parameters": [
+          {
+            "name": "target",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/CrosspostTarget"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "description": "Successful Response",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TeswirlerAccountOut"
+                  "$ref": "#/components/schemas/SiteAccountOut"
                 }
               }
             }
@@ -9783,7 +9813,8 @@
       "CrosspostTarget": {
         "type": "string",
         "enum": [
-          "teswirler"
+          "teswirler",
+          "makalam"
         ],
         "title": "CrosspostTarget"
       },
@@ -12296,7 +12327,7 @@
               "$ref": "#/components/schemas/CrosspostTarget"
             },
             "type": "array",
-            "maxItems": 1,
+            "maxItems": 2,
             "title": "Crosspost",
             "description": "Also publish a copy on these sites (owner sessions only). Sending happens in the background; see ``crossposts`` on the result."
           }
@@ -12990,6 +13021,92 @@
         "type": "object",
         "title": "SettingsUpdate"
       },
+      "SiteAccountOut": {
+        "properties": {
+          "site": {
+            "$ref": "#/components/schemas/CrosspostTarget"
+          },
+          "connected": {
+            "type": "boolean",
+            "title": "Connected"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "profile_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Url"
+          },
+          "connected_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connected At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "site",
+          "connected"
+        ],
+        "title": "SiteAccountOut"
+      },
+      "SiteConnect": {
+        "properties": {
+          "identifier": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 1,
+            "title": "Identifier",
+            "description": "Username or e-mail"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 1024,
+            "minLength": 1,
+            "title": "Password",
+            "description": "Used once, never stored"
+          }
+        },
+        "type": "object",
+        "required": [
+          "identifier",
+          "password"
+        ],
+        "title": "SiteConnect"
+      },
       "SourceRef": {
         "properties": {
           "thought_id": {
@@ -13284,88 +13401,6 @@
         "type": "object",
         "title": "TargetRequest"
       },
-      "TeswirlerAccountOut": {
-        "properties": {
-          "connected": {
-            "type": "boolean",
-            "title": "Connected"
-          },
-          "username": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Username"
-          },
-          "display_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Display Name"
-          },
-          "profile_url": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Profile Url"
-          },
-          "connected_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Connected At"
-          }
-        },
-        "type": "object",
-        "required": [
-          "connected"
-        ],
-        "title": "TeswirlerAccountOut"
-      },
-      "TeswirlerConnect": {
-        "properties": {
-          "identifier": {
-            "type": "string",
-            "maxLength": 320,
-            "minLength": 1,
-            "title": "Identifier",
-            "description": "Username or e-mail"
-          },
-          "password": {
-            "type": "string",
-            "maxLength": 1024,
-            "minLength": 1,
-            "title": "Password",
-            "description": "Used once, never stored"
-          }
-        },
-        "type": "object",
-        "required": [
-          "identifier",
-          "password"
-        ],
-        "title": "TeswirlerConnect"
-      },
       "ThoughtCreate": {
         "properties": {
           "content": {
@@ -13456,7 +13491,7 @@
               "$ref": "#/components/schemas/CrosspostTarget"
             },
             "type": "array",
-            "maxItems": 1,
+            "maxItems": 2,
             "title": "Crosspost",
             "description": "Also publish a copy on these sites (owner sessions only). Sending happens in the background; see ``crossposts`` on the result."
           }

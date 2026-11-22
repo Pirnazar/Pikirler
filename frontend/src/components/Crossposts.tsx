@@ -3,7 +3,7 @@ import { errorMessage, get, post, type Thought } from "../api/client";
 import { emit } from "../app/bus";
 import { useApp } from "../app/context";
 import { useI18n } from "../i18n";
-import { busy, crosspostsOf, type Crosspost } from "../lib/crosspost";
+import { busy, crosspostsOf, siteName, type Crosspost } from "../lib/crosspost";
 
 /** Where a thought was also published, with a retry for failures. While a
  *  copy is being sent the status is re-read every few seconds. */
@@ -33,10 +33,10 @@ export function Crossposts({ thought }: { thought: Thought }) {
 
   if (!list.length) return null;
 
-  async function retry(e: React.MouseEvent) {
+  async function retry(e: React.MouseEvent, target: string) {
     e.stopPropagation();
     try {
-      const next = await post<Crosspost[]>(`/thoughts/${thought.id}/crossposts/teswirler`);
+      const next = await post<Crosspost[]>(`/thoughts/${thought.id}/crossposts/${target}`);
       emit({ type: "updated", thought: { ...thought, crossposts: next } });
     } catch (err) {
       app.toast(errorMessage(err));
@@ -45,38 +45,39 @@ export function Crossposts({ thought }: { thought: Thought }) {
 
   return (
     <div className="pk-crossposts" onClick={(e) => e.stopPropagation()}>
-      {list.map((c) => (
+      {list.map((c) => { const site = siteName(c.target); return (
         <span key={c.target} className={"pk-crosspost " + c.status}>
           {c.status === "sent" && c.url ? (
-            <a href={c.url} target="_blank" rel="noopener noreferrer">{t("cp_sent", { site: "Teswirler" })} ↗</a>
+            <a href={c.url} target="_blank" rel="noopener noreferrer">{t("cp_sent", { site })} ↗</a>
           ) : busy(c) ? (
-            <span>{t("cp_sending", { site: "Teswirler" })}</span>
+            <span>{t("cp_sending", { site })}</span>
           ) : c.status === "sent" ? (
-            <span>{t("cp_sent", { site: "Teswirler" })}</span>
+            <span>{t("cp_sent", { site })}</span>
           ) : (
             <>
               <span title={c.error_message ?? undefined}>
-                {c.status === "unknown" ? t("cp_unknown", { site: "Teswirler" }) : t("cp_failed", { site: "Teswirler" })}
-                {c.status === "failed" && c.error_code && <> · {cpReason(t, c)}</>}
+                {c.status === "unknown" ? t("cp_unknown", { site }) : t("cp_failed", { site })}
+                {c.status === "failed" && c.error_code && <> · {cpReason(t, c, site)}</>}
               </span>
-              <button className="pk-link-btn" onClick={retry}>{c.status === "unknown" ? t("cp_send_again") : t("cp_retry")}</button>
+              <button className="pk-link-btn" onClick={(e) => retry(e, c.target)}>{c.status === "unknown" ? t("cp_send_again") : t("cp_retry")}</button>
             </>
           )}
         </span>
-      ))}
+      ); })}
     </div>
   );
 }
 
-function cpReason(t: ReturnType<typeof useI18n>["t"], c: Crosspost): string {
-  switch (c.error_code) {
-    case "teswirler_session_expired":
-    case "teswirler_not_connected":
+function cpReason(t: ReturnType<typeof useI18n>["t"], c: Crosspost, site: string): string {
+  const kind = (c.error_code ?? "").replace(/^(teswirler|makalam)_/, "");
+  switch (kind) {
+    case "session_expired":
+    case "not_connected":
       return t("cp_reconnect");
-    case "teswirler_unavailable":
-      return t("cp_unavailable");
-    case "teswirler_rejected":
-      return c.error_message || t("cp_rejected");
+    case "unavailable":
+      return t("cp_unavailable", { site });
+    case "too_long":
+      return t("e_makalam_too_long");
     default:
       return c.error_message || t("cp_rejected");
   }

@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import { del, get, put, type Thought } from "../api/client";
 import type { components } from "../api/schema";
 
-export type TeswirlerAccount = components["schemas"]["TeswirlerAccountOut"];
+export type SiteAccount = components["schemas"]["SiteAccountOut"];
+export type Site = components["schemas"]["CrosspostTarget"];
 export type Crosspost = components["schemas"]["CrosspostOut"];
-export type ShareTarget = "x" | "teswirler";
 
 /** X allows 280 characters; a longer thought is cut with an ellipsis. */
 export const X_LIMIT = 280;
@@ -38,47 +38,61 @@ export function openX(content: string, tab?: Window | null): boolean {
   return !!window.open(url, "_blank", "noopener");
 }
 
-// --- Teswirler account: one shared, lazily loaded copy for the whole app ---
+// --- accounts on other sites: one shared, lazily loaded copy for the whole app ---
 
-let account: TeswirlerAccount | null = null;
-let loading: Promise<void> | null = null;
-const listeners = new Set<(a: TeswirlerAccount | null) => void>();
+/** Sites a thought can be published on from Pikirler (X goes through its web intent). */
+export const SITES: readonly Site[] = ["teswirler", "makalam"];
 
-function set(a: TeswirlerAccount | null) {
-  account = a;
-  listeners.forEach((fn) => fn(a));
+export function siteName(site: string): string {
+  return site === "teswirler" ? "Teswirler" : site === "makalam" ? "makalam" : site;
 }
 
-export function loadTeswirler(force = false): Promise<void> {
-  if (!force && (account || loading)) return loading ?? Promise.resolve();
-  loading = get<TeswirlerAccount>("/crosspost/teswirler")
-    .then(set, () => undefined)
-    .finally(() => {
-      loading = null;
-    });
-  return loading;
+/** makalam: 500 characters a post; a longer thought goes as a chain of up to 25. */
+export const MAKALAM_LIMIT = 500;
+export const MAKALAM_CHAIN = 25;
+
+const accounts = new Map<Site, SiteAccount>();
+const loading = new Map<Site, Promise<void>>();
+const listeners = new Set<() => void>();
+
+function setAccount(a: SiteAccount) {
+  accounts.set(a.site, a);
+  listeners.forEach((fn) => fn());
 }
 
-export async function connectTeswirler(identifier: string, password: string): Promise<TeswirlerAccount> {
-  const a = await put<TeswirlerAccount>("/crosspost/teswirler", { identifier, password });
-  set(a);
+export function loadSite(site: Site, force = false): Promise<void> {
+  const pending = loading.get(site);
+  if (pending) return pending;
+  if (!force && accounts.has(site)) return Promise.resolve();
+  const p = get<SiteAccount>(`/crosspost/${site}`)
+    .then(setAccount, () => undefined)
+    .finally(() => loading.delete(site));
+  loading.set(site, p);
+  return p;
+}
+
+export async function connectSite(site: Site, identifier: string, password: string): Promise<SiteAccount> {
+  const a = await put<SiteAccount>(`/crosspost/${site}`, { identifier, password });
+  setAccount(a);
   return a;
 }
 
-export async function disconnectTeswirler(): Promise<void> {
-  set(await del<TeswirlerAccount>("/crosspost/teswirler"));
+export async function disconnectSite(site: Site): Promise<void> {
+  setAccount(await del<SiteAccount>(`/crosspost/${site}`));
 }
 
-export function useTeswirler(): TeswirlerAccount | null {
-  const [a, setA] = useState(account);
+/** The owner's accounts on every site, loaded on first use. */
+export function useSites(): Partial<Record<Site, SiteAccount>> {
+  const [, rerender] = useState(0);
   useEffect(() => {
-    listeners.add(setA);
-    loadTeswirler();
+    const fn = () => rerender((n) => n + 1);
+    listeners.add(fn);
+    SITES.forEach((s) => loadSite(s));
     return () => {
-      listeners.delete(setA);
+      listeners.delete(fn);
     };
   }, []);
-  return a;
+  return Object.fromEntries(accounts) as Partial<Record<Site, SiteAccount>>;
 }
 
 export const busy = (c: Crosspost) => c.status === "pending" || c.status === "sending";

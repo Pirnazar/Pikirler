@@ -5,7 +5,7 @@ import { emit } from "../app/bus";
 import { typeLabel, useApp } from "../app/context";
 import { useI18n } from "../i18n";
 import { useOnline } from "../app/hooks";
-import { openX, reserveTab, useTeswirler, xText } from "../lib/crosspost";
+import { MAKALAM_CHAIN, MAKALAM_LIMIT, openX, reserveTab, siteName, SITES, useSites, xText, type Site } from "../lib/crosspost";
 import { parseTags, snip } from "../lib/format";
 import { I, Icon } from "../lib/icons";
 
@@ -47,8 +47,8 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
   const [busy, setBusy] = useState(false);
   // Sharing is off by default and resets after every publish: Pikirler is private.
   const [toX, setToX] = useState(false);
-  const [toTeswirler, setToTeswirler] = useState(false);
-  const teswirler = useTeswirler();
+  const [toSites, setToSites] = useState<Site[]>([]);
+  const accounts = useSites();
   const ta = useRef<HTMLTextAreaElement>(null);
   const imageIn = useRef<HTMLInputElement>(null);
   const videoIn = useRef<HTMLInputElement>(null);
@@ -129,14 +129,14 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
     if (!canPublish) return;
     const links = items.filter((p) => p.kind === "link").map((p) => p.url!);
     const content = [draft.trim(), ...links].filter(Boolean).join("\n\n");
-    const sendTeswirler = toTeswirler && !!teswirler?.connected;
-    if ((toX || sendTeswirler) && !content.trim()) return app.toast(t("e_crosspost_empty"));
+    const sendTo = toSites.filter((s) => accounts[s]?.connected);
+    if ((toX || sendTo.length) && !content.trim()) return app.toast(t("e_crosspost_empty"));
     const body = {
       content,
       thought_type: type,
       project_ids: projectId ? [projectId] : [],
       attachment_ids: items.flatMap((p) => (p.att ? [p.att.id] : [])),
-      crosspost: sendTeswirler ? (["teswirler"] as const) : [],
+      crosspost: sendTo,
     };
     // Opened during the click so the browser allows it; filled in after publishing.
     const xTab = toX ? reserveTab() : null;
@@ -156,7 +156,7 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
       setProjectId("");
       setLinkOpen(false);
       setToX(false);
-      setToTeswirler(false);
+      setToSites([]);
       try {
         localStorage.removeItem(DRAFT_KEY);
       } catch {
@@ -194,7 +194,11 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
   const statusText = uploading ? t("uploading") : failed ? t("upload_failed_remove") : !online ? t("offline_draft") : status;
   const detected = parseTags(draft);
   const willSave = /https?:\/\/\S+\.\S+/i.test(draft) || items.some((p) => p.kind === "link");
-  const xCut = toX && xText([draft.trim(), ...items.filter((p) => p.kind === "link").map((p) => p.url!)].filter(Boolean).join("\n\n")).cut;
+  const shareText = [draft.trim(), ...items.filter((p) => p.kind === "link").map((p) => p.url!)].filter(Boolean).join("\n\n");
+  const xCut = toX && xText(shareText).cut;
+  const toMakalam = toSites.includes("makalam");
+  const makalamTooLong = shareText.length > MAKALAM_LIMIT * MAKALAM_CHAIN;
+  const toggleSite = (site: Site, on: boolean) => setToSites((list) => (on ? [...list, site] : list.filter((x) => x !== site)));
 
   const share = (
     <div className="pk-share" role="group" aria-label={t("share_also")} style={variant === "sheet" ? { padding: "0 16px 10px" } : undefined}>
@@ -203,14 +207,23 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
         <input type="checkbox" aria-label="X" checked={toX} onChange={(e) => setToX(e.target.checked)} />
         <span>X</span>
       </label>
-      <label className={"pk-check" + (teswirler?.connected ? "" : " off")} title={teswirler?.connected ? "@" + (teswirler.username ?? "") : t("teswirler_connect_first")}>
-        <input type="checkbox" aria-label="Teswirler" checked={toTeswirler && !!teswirler?.connected} disabled={!teswirler?.connected}
-          onChange={(e) => setToTeswirler(e.target.checked)} />
-        <span>Teswirler</span>
-      </label>
-      {!teswirler?.connected && (
-        <button type="button" className="pk-link-btn" onClick={() => { onClose?.(); app.go("settings"); }}>{t("teswirler_connect_short")}</button>
+      {SITES.map((site) => {
+        const account = accounts[site];
+        const name = siteName(site);
+        return (
+          <label key={site} className={"pk-check" + (account?.connected ? "" : " off")}
+            title={account?.connected ? "@" + (account.username ?? "") : t("site_connect_first", { site: name })}>
+            <input type="checkbox" aria-label={name} checked={toSites.includes(site) && !!account?.connected} disabled={!account?.connected}
+              onChange={(e) => toggleSite(site, e.target.checked)} />
+            <span>{name}</span>
+          </label>
+        );
+      })}
+      {SITES.some((site) => !accounts[site]?.connected) && (
+        <button type="button" className="pk-link-btn" onClick={() => { onClose?.(); app.go("settings"); }}>{t("sites_connect_short")}</button>
       )}
+      {toMakalam && makalamTooLong && <span className="pk-share-note">{t("e_makalam_too_long")}</span>}
+      {toMakalam && !makalamTooLong && shareText.length > MAKALAM_LIMIT && <span className="pk-share-note">{t("makalam_chain")}</span>}
       {xCut && <span className="pk-share-note">{t("x_will_cut", { n: 280 })}</span>}
       {toX && <span className="pk-share-note">{t("x_opens")}</span>}
     </div>

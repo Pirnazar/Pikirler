@@ -20,6 +20,7 @@ from urllib.parse import quote, urlsplit
 import httpx
 
 from app.core.config import get_settings
+from app.modules.pikirler.integrations import remote
 
 USER_AGENT = "Pikirler/1.0 (+crosspost)"
 
@@ -32,41 +33,36 @@ def set_transport(transport: httpx.AsyncBaseTransport | None) -> None:
     _transport = transport
 
 
-class TeswirlerError(Exception):
+class TeswirlerError(remote.RemoteError):
     """Base class. ``code`` is stable and safe to show; ``message`` comes from
     Teswirler (never contains our request body)."""
 
     code = "teswirler_error"
 
-    def __init__(self, message: str = "", *, status: int | None = None) -> None:
-        super().__init__(message or self.code)
-        self.message = message[:300]
-        self.status = status
 
-
-class LoginRejected(TeswirlerError):
+class LoginRejected(TeswirlerError, remote.LoginRejected):
     code = "teswirler_login_failed"
 
 
-class SessionExpired(TeswirlerError):
+class SessionExpired(TeswirlerError, remote.SessionExpired):
     """The stored session no longer works; the owner must connect again."""
 
     code = "teswirler_session_expired"
 
 
-class Rejected(TeswirlerError):
+class Rejected(TeswirlerError, remote.Rejected):
     """Teswirler refused the post (validation, limits). Nothing was created."""
 
     code = "teswirler_rejected"
 
 
-class Unavailable(TeswirlerError):
+class Unavailable(TeswirlerError, remote.Unavailable):
     """Teswirler could not be reached or answered 5xx/429 before accepting."""
 
     code = "teswirler_unavailable"
 
 
-class OutcomeUnknown(TeswirlerError):
+class OutcomeUnknown(TeswirlerError, remote.OutcomeUnknown):
     """The request was sent but no answer came back: the post may exist."""
 
     code = "teswirler_outcome_unknown"

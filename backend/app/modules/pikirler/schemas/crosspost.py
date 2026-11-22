@@ -18,12 +18,13 @@ class CrosspostOut(Schema):
     updated_at: datetime
 
 
-class TeswirlerConnect(Schema):
+class SiteConnect(Schema):
     identifier: str = Field(min_length=1, max_length=320, description="Username or e-mail")
     password: str = Field(min_length=1, max_length=1024, description="Used once, never stored")
 
 
-class TeswirlerAccountOut(Schema):
+class SiteAccountOut(Schema):
+    site: CrosspostTarget
     connected: bool
     username: str | None = None
     display_name: str | None = None

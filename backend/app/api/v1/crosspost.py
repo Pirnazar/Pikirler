@@ -1,4 +1,4 @@
-"""Publishing copies of thoughts on other sites (Teswirler). Owner sessions only."""
+"""Publishing copies of thoughts on other sites (Teswirler, makalam). Owner sessions only."""
 
 from __future__ import annotations
 
@@ -9,32 +9,28 @@ from fastapi import APIRouter
 from app.api.deps import DB, Account
 from app.modules.pikirler.models.enums import CrosspostTarget
 from app.modules.pikirler.schemas.common import ERROR_RESPONSES
-from app.modules.pikirler.schemas.crosspost import (
-    CrosspostOut,
-    TeswirlerAccountOut,
-    TeswirlerConnect,
-)
+from app.modules.pikirler.schemas.crosspost import CrosspostOut, SiteAccountOut, SiteConnect
 from app.modules.pikirler.services import crosspost
 
 router = APIRouter(tags=["crosspost"], responses=ERROR_RESPONSES)
 
 
-@router.get("/crosspost/teswirler", response_model=TeswirlerAccountOut)
-async def teswirler_account(principal: Account, db: DB) -> TeswirlerAccountOut:
-    return await crosspost.get_account(db, principal.owner_id)
+@router.get("/crosspost/{target}", response_model=SiteAccountOut)
+async def site_account(target: CrosspostTarget, principal: Account, db: DB) -> SiteAccountOut:
+    return await crosspost.get_account(db, principal.owner_id, target)
 
 
-@router.put("/crosspost/teswirler", response_model=TeswirlerAccountOut)
-async def connect_teswirler(
-    body: TeswirlerConnect, principal: Account, db: DB
-) -> TeswirlerAccountOut:
-    """Sign in to Teswirler once. The password is not stored."""
-    return await crosspost.connect(db, principal, body.identifier, body.password)
+@router.put("/crosspost/{target}", response_model=SiteAccountOut)
+async def connect_site(
+    target: CrosspostTarget, body: SiteConnect, principal: Account, db: DB
+) -> SiteAccountOut:
+    """Sign in to the site once. The password is not stored."""
+    return await crosspost.connect(db, principal, target, body.identifier, body.password)
 
 
-@router.delete("/crosspost/teswirler", response_model=TeswirlerAccountOut)
-async def disconnect_teswirler(principal: Account, db: DB) -> TeswirlerAccountOut:
-    return await crosspost.disconnect(db, principal)
+@router.delete("/crosspost/{target}", response_model=SiteAccountOut)
+async def disconnect_site(target: CrosspostTarget, principal: Account, db: DB) -> SiteAccountOut:
+    return await crosspost.disconnect(db, principal, target)
 
 
 @router.get("/thoughts/{thought_id}/crossposts", response_model=list[CrosspostOut])

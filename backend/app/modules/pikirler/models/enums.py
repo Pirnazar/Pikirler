@@ -113,6 +113,7 @@ class JobStatus(StrEnum):
 
 class CrosspostTarget(StrEnum):
     teswirler = "teswirler"
+    makalam = "makalam"
 
 
 class CrosspostStatus(StrEnum):

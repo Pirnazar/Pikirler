@@ -197,6 +197,11 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
   const shareText = [draft.trim(), ...items.filter((p) => p.kind === "link").map((p) => p.url!)].filter(Boolean).join("\n\n");
   const xCut = toX && xText(shareText).cut;
   const toMakalam = toSites.includes("makalam");
+  // What goes along to the other sites: pictures and videos (sites' own limits).
+  const images = items.filter((p) => p.kind === "image").length;
+  const videos = items.filter((p) => p.kind === "video").length;
+  const media = images + videos;
+  const others = items.filter((p) => p.kind === "file").length;
   const makalamTooLong = shareText.length > MAKALAM_LIMIT * MAKALAM_CHAIN;
   const toggleSite = (site: Site, on: boolean) => setToSites((list) => (on ? [...list, site] : list.filter((x) => x !== site)));
 
@@ -222,6 +227,10 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
       {SITES.some((site) => !accounts[site]?.connected) && (
         <button type="button" className="pk-link-btn" onClick={() => { onClose?.(); app.go("settings"); }}>{t("sites_connect_short")}</button>
       )}
+      {toSites.includes("teswirler") && media > 4 && <span className="pk-share-note">{t("cp_files_teswirler")}</span>}
+      {toMakalam && videos > 0 && <span className="pk-share-note">{t("cp_files_makalam_video")}</span>}
+      {toMakalam && images > 6 && <span className="pk-share-note">{t("cp_files_makalam_many")}</span>}
+      {toSites.length > 0 && others > 0 && <span className="pk-share-note">{t("cp_files_other")}</span>}
       {toMakalam && makalamTooLong && <span className="pk-share-note">{t("e_makalam_too_long")}</span>}
       {toMakalam && !makalamTooLong && shareText.length > MAKALAM_LIMIT && <span className="pk-share-note">{t("makalam_chain")}</span>}
       {xCut && <span className="pk-share-note">{t("x_will_cut", { n: 280 })}</span>}

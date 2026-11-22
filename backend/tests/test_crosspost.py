@@ -14,7 +14,15 @@ from app.core.database import get_database
 from app.modules.pikirler.integrations import teswirler
 from app.modules.pikirler.models import Crosspost, ExternalAccount
 from tests.conftest import _client, new_thought
-from tests.helpers import run_jobs
+from tests.helpers import (
+    jpeg_with_gps,
+    mp4_with_location,
+    multipart_files,
+    run_jobs,
+    upload,
+    video_tags,
+    wav_bytes,
+)
 
 PASSWORD = "teswirler-pass-123"
 
@@ -26,6 +34,8 @@ class FakeTeswirler:
     expired: set[str] = field(default_factory=set)
     publish_mode: str = "ok"  # ok | timeout | reject
     posts: list[str] = field(default_factory=list)
+    images: list[list[str]] = field(default_factory=list)
+    uploads: list[tuple[str, str, bytes]] = field(default_factory=list)
     logins: int = 0
     refreshes: int = 0
     logouts: int = 0
@@ -59,8 +69,16 @@ class FakeTeswirler:
             return httpx.Response(
                 200, json={"data": {"id": "u1", "username": "pirnazar", "name": "Pirnazar"}}
             )
+        if path == "/uploads" and request.method == "POST":
+            assert request.url.params.get("folder") == "teswirs"
+            [(name, filename, mime, data)] = multipart_files(request)
+            assert name == "file"
+            self.uploads.append((filename, mime, data))
+            url = f"https://cdn.teswirler.com/teswirs/{len(self.uploads)}"
+            return httpx.Response(201, json={"data": {"url": url}})
         if path == "/pikirler" and request.method == "POST":
             content = json.loads(request.content)["content"]
+            self.images.append(json.loads(request.content).get("images", []))
             if self.publish_mode == "timeout":
                 self.posts.append(content)
                 raise httpx.ReadTimeout("lost", request=request)
@@ -274,3 +292,59 @@ async def test_service_tokens_cannot_crosspost(client, owner, db, fake) -> None:
         assert resp.json()["error"]["code"] == "crosspost_owner_only"
         assert (await svc.get("/crosspost/teswirler")).status_code == 403
     assert fake.posts == []
+
+
+# --- pictures and videos ------------------------------------------------------------------
+
+
+async def _attached(client: httpx.AsyncClient, *files: tuple[bytes, str, str]) -> list[str]:
+    ids = []
+    for data, name, mime in files:
+        resp = await upload(client, data, name, mime)
+        assert resp.status_code == 200, resp.text
+        ids.append(resp.json()["id"])
+    return ids
+
+
+async def test_pictures_and_videos_go_without_metadata(
+    client: httpx.AsyncClient, fake: FakeTeswirler
+) -> None:
+    import io
+
+    from PIL import Image
+
+    await _connect(client)
+    ids = await _attached(
+        client,
+        (jpeg_with_gps(), "IMG_0001.jpg", "image/jpeg"),
+        (mp4_with_location(), "VID_0001.mp4", "video/mp4"),
+        (wav_bytes(), "note.wav", "audio/wav"),  # sound is not sent anywhere
+    )
+    assert "location" in video_tags(mp4_with_location())  # the original has it
+    created = await new_thought(client, "Suratly", attachment_ids=ids, crosspost=["teswirler"])
+    await run_jobs()
+    assert [(n, m) for n, m, _ in fake.uploads] == [
+        ("IMG_0001.jpg", "image/jpeg"),
+        ("VID_0001.mp4", "video/mp4"),
+    ]
+    with Image.open(io.BytesIO(fake.uploads[0][2])) as img:
+        assert not img.getexif()  # no camera, no GPS
+    tags = video_tags(fake.uploads[1][2])
+    assert "location" not in tags and "make" not in tags
+    assert fake.images == [
+        ["https://cdn.teswirler.com/teswirs/1", "https://cdn.teswirler.com/teswirs/2"]
+    ]
+    assert (await client.get(f"/thoughts/{created['id']}/crossposts")).json()[0]["status"] == "sent"
+
+
+async def test_only_as_many_files_as_teswirler_takes(
+    client: httpx.AsyncClient, fake: FakeTeswirler
+) -> None:
+    await _connect(client)
+    ids = await _attached(
+        client, *[(jpeg_with_gps(n), f"p{n}.jpg", "image/jpeg") for n in range(5)]
+    )
+    await new_thought(client, "Bäş surat", attachment_ids=ids, crosspost=["teswirler"])
+    await run_jobs()
+    assert [n for n, _, _ in fake.uploads] == ["p0.jpg", "p1.jpg", "p2.jpg", "p3.jpg"]
+    assert len(fake.images[0]) == 4

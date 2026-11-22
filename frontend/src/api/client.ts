@@ -131,10 +131,15 @@ export const del = <T = void>(path: string) => request<T>("DELETE", path);
 export function errorMessage(e: unknown): string {
   if (!(e instanceof ApiError)) return translate("e_generic");
   // Accounts on other sites: "<site>_login_failed", "<site>_unavailable", ...
-  const siteError = /^(teswirler|makalam)_(login_failed|unavailable|not_connected)$/.exec(e.code ?? "");
+  const siteError = /^(teswirler|makalam)_(login_failed|unavailable|not_connected|session_expired)$/.exec(e.code ?? "");
   if (siteError) {
     const site = siteError[1] === "teswirler" ? "Teswirler" : "makalam";
-    const key = { login_failed: "e_site_login", unavailable: "cp_unavailable", not_connected: "site_connect_first" } as const;
+    const key = {
+      login_failed: "e_site_login",
+      unavailable: "cp_unavailable",
+      not_connected: "site_connect_first",
+      session_expired: "site_expired",
+    } as const;
     return translate(key[siteError[2] as keyof typeof key], { site });
   }
   switch (e.code) {

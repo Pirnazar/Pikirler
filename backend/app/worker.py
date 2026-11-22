@@ -46,6 +46,16 @@ async def sync_media(ctx: dict[str, Any]) -> int:
         return await media_corpus.schedule(db)
 
 
+async def keep_sessions(ctx: dict[str, Any]) -> dict[str, int]:
+    """Renew the sessions on Teswirler and makalam so they do not lapse."""
+    from app.modules.pikirler.services import crosspost
+
+    async with get_database().sessionmaker() as db:
+        result = await crosspost.keep_sessions(db)
+    log.info("site_sessions_checked", extra=result)
+    return result
+
+
 async def cleanup(ctx: dict[str, Any]) -> dict[str, Any]:
     async with get_database().sessionmaker() as db:
         result: dict[str, Any] = {}
@@ -81,6 +91,7 @@ class WorkerSettings:
             unique=True,
         ),
         cron(cleanup, minute={17}, unique=True),
+        cron(keep_sessions, hour={1, 7, 13, 19}, minute={41}, unique=True),
         cron(sync_links, minute=set(range(3, 60, 10)), unique=True),
         cron(sync_media, minute=set(range(1, 60, 10)), unique=True),
     ]

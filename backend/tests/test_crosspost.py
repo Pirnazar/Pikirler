@@ -348,3 +348,57 @@ async def test_only_as_many_files_as_teswirler_takes(
     await run_jobs()
     assert [n for n, _, _ in fake.uploads] == ["p0.jpg", "p1.jpg", "p2.jpg", "p3.jpg"]
     assert len(fake.images[0]) == 4
+
+
+# --- keeping the session alive -----------------------------------------------------------
+
+
+async def _keep() -> dict[str, int]:
+    from app.modules.pikirler.services import crosspost
+
+    async with get_database().sessionmaker() as db:
+        return await crosspost.keep_sessions(db)
+
+
+async def _make_due() -> None:
+    async with get_database().sessionmaker() as db:
+        await db.execute(update(ExternalAccount).values(checked_at=None))
+        await db.commit()
+
+
+async def test_session_is_renewed_and_an_ended_one_is_shown(
+    client: httpx.AsyncClient, fake: FakeTeswirler
+) -> None:
+    await _connect(client)
+    assert (await _keep())["renewed"] == 0  # just connected: nothing due
+    await _make_due()
+    assert (await _keep())["renewed"] == 1
+    assert fake.refreshes == 1
+    # Teswirler ends the session (e.g. after a long pause).
+    fake.refresh_cookie = "a-new-login-is-needed"
+    await _make_due()
+    assert (await _keep())["expired"] == 1
+    account = (await client.get("/crosspost/teswirler")).json()
+    assert (account["connected"], account["expired"]) == (True, True)
+    resp = await client.post("/thoughts", json={"content": "Soň", "crosspost": ["teswirler"]})
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "teswirler_session_expired"
+    # Connecting again clears it.
+    await _connect(client)
+    assert (await client.get("/crosspost/teswirler")).json()["expired"] is False
+    await new_thought(client, "Täzeden", crosspost=["teswirler"])
+    await run_jobs()
+    assert fake.posts == ["Täzeden"]
+
+
+async def test_post_that_meets_an_ended_session_marks_the_account(
+    client: httpx.AsyncClient, fake: FakeTeswirler
+) -> None:
+    await _connect(client)
+    fake.expired.add(fake.access)
+    fake.refresh_cookie = "gone"
+    created = await new_thought(client, "Gitmedi", crosspost=["teswirler"])
+    await run_jobs()
+    shared = (await client.get(f"/thoughts/{created['id']}/crossposts")).json()[0]
+    assert shared["error_code"] == "teswirler_session_expired"
+    assert (await client.get("/crosspost/teswirler")).json()["expired"] is True

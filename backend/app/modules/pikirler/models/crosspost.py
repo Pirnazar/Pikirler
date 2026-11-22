@@ -41,6 +41,10 @@ class ExternalAccount(Base):
     username: Mapped[str | None] = mapped_column(String(200))
     display_name: Mapped[str | None] = mapped_column(String(200))
     credentials: Mapped[str] = mapped_column(Text, nullable=False)
+    # Last time the session was renewed or found alive, and when the site said
+    # it had ended (the owner has to connect again).
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    expired_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

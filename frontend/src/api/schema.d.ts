@@ -3258,6 +3258,12 @@ export interface components {
             site: components["schemas"]["CrosspostTarget"];
             /** Connected */
             connected: boolean;
+            /**
+             * Expired
+             * @description The site ended the session: connect the account again
+             * @default false
+             */
+            expired: boolean;
             /** Username */
             username?: string | null;
             /** Display Name */

@@ -245,7 +245,9 @@ function SiteRow({ site, account, last }: { site: Site; account?: SiteAccount; l
         <span style={{ flex: 1, minWidth: 200 }}>
           <span style={{ display: "block", fontWeight: 800 }}>{name}</span>
           <span style={{ display: "block", fontSize: 13, color: "var(--color-neutral-700)", marginTop: 2 }}>
-            {account?.connected ? (
+            {account?.expired ? (
+              <span style={{ color: "var(--color-danger, #c0392b)" }}>{t("site_expired", { site: name })}</span>
+            ) : account?.connected ? (
               <>
                 {t("site_connected_as")}{" "}
                 {account.profile_url ? <a href={account.profile_url} target="_blank" rel="noopener noreferrer">@{account.username}</a> : account.display_name}
@@ -254,13 +256,16 @@ function SiteRow({ site, account, last }: { site: Site; account?: SiteAccount; l
             {site === "makalam" && <span style={{ display: "block", marginTop: 2 }}>{t("makalam_desc")}</span>}
           </span>
         </span>
+        {account?.expired && !open && (
+          <button className="btn btn-primary" onClick={() => setOpen(true)}>{t("site_reconnect")}</button>
+        )}
         {account?.connected ? (
           <button className="btn btn-secondary" disabled={busy} onClick={disconnect}>{t("site_disconnect")}</button>
         ) : !open ? (
           <button className="btn btn-secondary" onClick={() => setOpen(true)}>{t("site_connect")}</button>
         ) : null}
       </div>
-      {!account?.connected && open && (
+      {(!account?.connected || account.expired) && open && (
         <form onSubmit={connect} style={{ display: "grid", gap: 10 }}>
           <div className="pk-form-row">
             <div className="field"><label htmlFor={`${id}-login`}>{site === "makalam" ? t("makalam_login") : t("site_login", { site: name })}</label>

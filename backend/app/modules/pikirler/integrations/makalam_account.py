@@ -215,7 +215,8 @@ class MakalamClient:
     async def __aexit__(self, *exc: object) -> None:
         await self._http.aclose()
 
-    def _keep(self) -> None:
+    def keep(self) -> None:
+        """Take the cookies as they are now into ``session``."""
         self.session = Session(cookies={c.name: c.value or "" for c in self._http.cookies.jar})
 
     def _cookie(self, name: str) -> str | None:
@@ -289,7 +290,7 @@ class MakalamClient:
             profile = await self.me()
         except SessionExpired as exc:
             raise LoginRejected("") from exc
-        self._keep()
+        self.keep()
         return profile
 
     async def me(self) -> Profile:
@@ -363,7 +364,7 @@ class MakalamClient:
             answer = _json(response)
             code = answer.get("code") if isinstance(answer, dict) else None
             if status in (200, 201):
-                self._keep()
+                self.keep()
                 return self._published(answer, len(parts))
             if status == 409 and attempt < ATTEMPTS:  # the same key is still being handled
                 await asyncio.sleep(RETRY_DELAY)

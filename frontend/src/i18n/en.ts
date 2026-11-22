@@ -521,6 +521,8 @@ export const en = {
   site_login: "{site} username or email",
   site_password: "{site} password",
   site_password_note: "The password is used once to sign in and is not stored. Only an encrypted session is kept.",
+  site_expired: "The {site} session has ended. Connect the account again.",
+  site_reconnect: "Connect again",
   makalam_desc: "A thought longer than 500 characters goes as a chain of posts (up to 25).",
   makalam_login: "makalam username",
   makalam_chain: "makalam: over 500 characters, goes as a chain of posts",

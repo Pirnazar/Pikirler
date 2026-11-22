@@ -81,6 +81,9 @@ export async function disconnectSite(site: Site): Promise<void> {
   setAccount(await del<SiteAccount>(`/crosspost/${site}`));
 }
 
+/** Connected and the session still works: a thought can be sent there. */
+export const usable = (a?: SiteAccount | null): boolean => !!a?.connected && !a.expired;
+
 /** The owner's accounts on every site, loaded on first use. */
 export function useSites(): Partial<Record<Site, SiteAccount>> {
   const [, rerender] = useState(0);

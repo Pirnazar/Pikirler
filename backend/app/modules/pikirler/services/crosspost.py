@@ -20,6 +20,7 @@ import logging
 import uuid
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import timedelta
 from typing import Any
 from urllib.parse import quote
 
@@ -100,6 +101,11 @@ class Site:
     async def logout(self, session: dict[str, Any]) -> None:
         raise NotImplementedError
 
+    async def keep_alive(self, session: dict[str, Any]) -> dict[str, Any]:
+        """Renew the session so it does not lapse between posts; the session
+        to keep. Raises ``remote.SessionExpired`` when the site ended it."""
+        raise NotImplementedError
+
 
 class TeswirlerSite(Site):
     target = TESWIRLER
@@ -134,6 +140,12 @@ class TeswirlerSite(Site):
     async def logout(self, session: dict[str, Any]) -> None:
         async with teswirler.TeswirlerClient(teswirler.Session.from_dict(session)) as client:
             await client.logout()
+
+    async def keep_alive(self, session: dict[str, Any]) -> dict[str, Any]:
+        async with teswirler.TeswirlerClient(teswirler.Session.from_dict(session)) as client:
+            await client.refresh()  # a fresh access token and (maybe) refresh cookie
+            assert client.session is not None
+            return client.session.to_dict()
 
 
 class MakalamSite(Site):
@@ -185,6 +197,14 @@ class MakalamSite(Site):
         async with makalam_account.MakalamClient(start) as client:
             await client.logout()
 
+    async def keep_alive(self, session: dict[str, Any]) -> dict[str, Any]:
+        start = makalam_account.Session.from_dict(session)
+        async with makalam_account.MakalamClient(start) as client:
+            await client.me()  # signed-in pages keep the Django session going
+            client.keep()
+            assert client.session is not None
+            return client.session.to_dict()
+
 
 SITES: dict[str, Site] = {TESWIRLER: TeswirlerSite(), MAKALAM: MakalamSite()}
 
@@ -213,6 +233,7 @@ def account_out(site: Site, account: ExternalAccount | None) -> SiteAccountOut:
     return SiteAccountOut(
         site=CrosspostTarget(site.target),
         connected=True,
+        expired=account.expired_at is not None,
         username=account.username,
         display_name=account.display_name,
         profile_url=site.profile_url(account.username) if account.username else None,
@@ -259,6 +280,8 @@ async def connect(
         account = ExternalAccount(owner_id=principal.owner_id, provider=site.target)
         db.add(account)
     account.credentials = sealed
+    account.checked_at = utcnow()
+    account.expired_at = None
     account.remote_user_id = profile.user_id
     account.username = profile.username
     account.display_name = profile.display_name
@@ -307,13 +330,22 @@ async def queue(
         raise ValidationFailed("There is no text to share", code="crosspost_empty")
     for target in dict.fromkeys(targets):
         site = site_of(target)
-        if await _account(db, principal.owner_id, site.target) is None:
-            raise site.not_connected()
+        _require_live(site, await _account(db, principal.owner_id, site.target))
         site.check(thought.content)
         row = Crosspost(owner_id=principal.owner_id, thought_id=thought.id, target=site.target)
         db.add(row)
         await db.flush()
         await _enqueue(db, row)
+
+
+def _require_live(site: Site, account: ExternalAccount | None) -> None:
+    if account is None:
+        raise site.not_connected()
+    if account.expired_at is not None:
+        raise Conflict(
+            f"The {site.name} session has ended: connect the account again in Settings",
+            code=f"{site.target}_session_expired",
+        )
 
 
 async def _enqueue(db: AsyncSession, row: Crosspost) -> None:
@@ -346,8 +378,7 @@ async def share(
     elif row.status == CrosspostStatus.sent.value:
         raise Conflict("This thought is already there", code="crosspost_already_sent")
     elif row.status in RETRYABLE:
-        if await _account(db, principal.owner_id, site.target) is None:
-            raise site.not_connected()
+        _require_live(site, await _account(db, principal.owner_id, site.target))
         if not thought.content.strip():
             raise ValidationFailed("There is no text to share", code="crosspost_empty")
         site.check(thought.content)
@@ -483,6 +514,8 @@ async def run(db: AsyncSession, crosspost_id: uuid.UUID) -> dict[str, Any]:
         return await _finish(db, crosspost_id, CrosspostStatus.unknown, error=exc)
     except remote.RemoteError as exc:
         await _save_session(db, site, account_id, exc.session, session)
+        if isinstance(exc, remote.SessionExpired):
+            await _mark_expired(db, account_id)
         return await _finish(db, crosspost_id, CrosspostStatus.failed, error=exc)
     await _save_session(db, site, account_id, current, session)
     return await _finish(db, crosspost_id, CrosspostStatus.sent, published=published)
@@ -501,7 +534,72 @@ async def _save_session(
     account = await db.get(ExternalAccount, account_id, with_for_update=True)
     if account is not None:
         account.credentials = seal(current, site.secret_purpose)
+        account.checked_at = utcnow()
         await db.commit()
+
+
+async def _mark_expired(db: AsyncSession, account_id: uuid.UUID | None) -> None:
+    account = (
+        await db.get(ExternalAccount, account_id, with_for_update=True) if account_id else None
+    )
+    if account is not None and account.expired_at is None:
+        account.expired_at = utcnow()
+        await db.commit()
+        log.info("crosspost_session_expired", extra={"target": account.provider})
+
+
+# --- keeping sessions alive ---------------------------------------------------------
+
+KEEP_EVERY = timedelta(hours=5)
+
+
+async def keep_sessions(db: AsyncSession) -> dict[str, int]:
+    """Renew every connected session that was not used or renewed lately, so a
+    quiet week does not log Pikirler out of the sites. A session the site has
+    ended is marked: the owner sees "connect again" before the next post."""
+    due = utcnow() - KEEP_EVERY
+    ids = (
+        (
+            await db.execute(
+                select(ExternalAccount.id).where(
+                    ExternalAccount.expired_at.is_(None),
+                    (ExternalAccount.checked_at.is_(None)) | (ExternalAccount.checked_at < due),
+                )
+            )
+        )
+        .scalars()
+        .all()
+    )
+    result = {"renewed": 0, "expired": 0, "unreachable": 0}
+    for account_id in ids:
+        account = await db.get(ExternalAccount, account_id, with_for_update=True)
+        if account is None:
+            continue
+        site = site_of(account.provider)
+        try:
+            session = unseal(account.credentials, site.secret_purpose)
+        except SecretUnreadable:
+            account.expired_at = utcnow()
+            await db.commit()
+            result["expired"] += 1
+            continue
+        await db.commit()  # no lock held while the site answers
+        try:
+            renewed = await site.keep_alive(session)
+        except remote.SessionExpired:
+            await _mark_expired(db, account_id)
+            result["expired"] += 1
+            continue
+        except remote.RemoteError:
+            result["unreachable"] += 1  # try again next time
+            continue
+        account = await db.get(ExternalAccount, account_id, with_for_update=True)
+        if account is not None:
+            account.credentials = seal(renewed, site.secret_purpose)
+            account.checked_at = utcnow()
+            await db.commit()
+            result["renewed"] += 1
+    return result
 
 
 async def run_job(db: AsyncSession, payload: dict[str, Any]) -> dict[str, Any]:

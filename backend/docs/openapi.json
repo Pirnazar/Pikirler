@@ -13030,6 +13030,12 @@
             "type": "boolean",
             "title": "Connected"
           },
+          "expired": {
+            "type": "boolean",
+            "title": "Expired",
+            "description": "The site ended the session: connect the account again",
+            "default": false
+          },
           "username": {
             "anyOf": [
               {

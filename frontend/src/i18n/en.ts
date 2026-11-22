@@ -428,6 +428,7 @@ export const en = {
   e_rate_min: "Too many attempts. Try again in {n} min.",
   e_password_disabled: "This Pikirler opens with the magic word, not a password.",
   e_magic_needed: "You sign in with the magic word, so it can be changed but not removed.",
+  lk_files_pending: { one: "Saving {n} picture or video…", other: "Saving {n} pictures and videos…" },
   lk_new: "new",
   lk_summary: "Summary",
   lk_summary_making: "Making a summary…",

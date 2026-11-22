@@ -53,6 +53,9 @@ class Page:
     # comment missing from ``comments`` be taken as deleted on the site.
     comments_complete: bool = False
     duration_seconds: int | None = None
+    # Pictures and videos to keep with the copy: [{"url", "kind"}]. None for
+    # sites where only a cover is kept.
+    media: list[dict[str, str]] | None = None
 
     def finish(self) -> Page:
         self.text = tidy(self.text)[:MAX_TEXT_CHARS]
@@ -194,9 +197,8 @@ def _teswirler_page(url: str, api_path: str, data: dict[str, Any]) -> Page:
         )
     raw_content = data.get("content")
     content = raw_content if isinstance(raw_content, str) else ""
-    first_image = images[0] if isinstance(images, list) and images else None
-    if isinstance(first_image, dict):
-        first_image = first_image.get("url")
+    media = teswirler_media(images)
+    first_image = next((m["url"] for m in media if m["kind"] == "image"), None)
     created = _date(data.get("createdAt"))
     edited = _date(data.get("updatedAt"))
     return Page(
@@ -211,8 +213,25 @@ def _teswirler_page(url: str, api_path: str, data: dict[str, Any]) -> Page:
         if edited and created and (edited - created).total_seconds() > 60
         else None,
         text=content,
-        image_url=first_image if isinstance(first_image, str) else None,
+        image_url=first_image,
+        media=media,
     )
+
+
+MAX_MEDIA = 20
+
+
+def teswirler_media(entries: Any) -> list[dict[str, str]]:
+    """A pikir's pictures and videos: [{"url", "type": "IMAGE"|"VIDEO"}]."""
+    found: list[dict[str, str]] = []
+    for entry in entries if isinstance(entries, list) else []:
+        url = entry.get("url") if isinstance(entry, dict) else entry
+        if not isinstance(url, str) or not url.startswith("https://"):
+            continue
+        kind = "video" if isinstance(entry, dict) and entry.get("type") == "VIDEO" else "image"
+        if all(m["url"] != url for m in found):
+            found.append({"url": url, "kind": kind})
+    return found[:MAX_MEDIA]
 
 
 async def _from_teswirler(url: str, api_path: str) -> Page | None:
@@ -482,6 +501,10 @@ async def extract(url: str) -> Page:
         return (await video_sites.from_tiktok(url)).finish()
     if video_sites.is_instagram_post(url):
         return (await video_sites.from_instagram(url)).finish()
+    from app.modules.pikirler.integrations import makalam
+
+    if makalam.is_makalam(url):
+        return (await makalam.from_makalam(url)).finish()
     api_path = teswirler_api_path(url)
     if api_path:
         page = await _from_teswirler(url, api_path)

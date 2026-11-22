@@ -14,6 +14,7 @@ class LinkMedia(Schema):
     """The video downloaded from the link, served like any attachment."""
 
     id: uuid.UUID
+    kind: str = "video"
     mime_type: str
     file_size: int
     processing_status: str
@@ -62,6 +63,10 @@ class LinkOut(Schema):
     )
     media_error: str | None = None
     media: LinkMedia | None = Field(default=None, description="The downloaded video")
+    files: list[LinkMedia] = Field(
+        default_factory=list, description="Pictures and videos of the post, kept in Pikirler"
+    )
+    files_pending: int = Field(default=0, description="Pictures and videos still to download")
     cover_url: str | None = None
     fetched_at: datetime | None = None
 

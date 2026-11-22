@@ -762,3 +762,15 @@ mark { background: var(--color-accent-200); color: inherit; }
   .pk-archive-title { font-size: .875rem; }
   .pk-archive-search input { padding-block: var(--space-3); font-size: 14px; }
 }
+
+/* A saved post's own pictures and videos */
+.pk-post-files { display: grid; gap: 4px; }
+.pk-post-files.multi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.pk-post-files a { display: block; }
+.pk-post-files img, .pk-post-files video { width: 100%; display: block; object-fit: cover; background: #000; }
+.pk-post-files img { max-height: 360px; }
+.pk-post-files.multi img, .pk-post-files.multi video { aspect-ratio: 1 / 1; max-height: none; }
+.pk-post-files video { max-height: 520px; }
+.pk-post-files.large { margin: 14px 0 18px; }
+.pk-post-files.large img { max-height: 70vh; object-fit: contain; }
+.pk-post-files.large.multi img { aspect-ratio: auto; }

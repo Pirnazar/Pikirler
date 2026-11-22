@@ -75,7 +75,9 @@ export function openReader(id: string | null) {
 
 /** Re-reads the thought every few seconds while one of its pages is being saved. */
 function usePollWhilePending(thought: Thought) {
-  const pending = (thought.links ?? []).some((l) => l.status === "pending" || l.media_status === "pending");
+  const pending = (thought.links ?? []).some(
+    (l) => l.status === "pending" || l.media_status === "pending" || (l.files_pending ?? 0) > 0,
+  );
   useEffect(() => {
     if (!pending) return;
     let tries = 0;
@@ -83,7 +85,7 @@ function usePollWhilePending(thought: Thought) {
       tries += 1;
       try {
         const next = await get<Thought>(`/thoughts/${thought.id}`);
-        if (!(next.links ?? []).some((l) => l.status === "pending" || l.media_status === "pending") || tries > 120) {
+        if (!(next.links ?? []).some((l) => l.status === "pending" || l.media_status === "pending" || (l.files_pending ?? 0) > 0) || tries > 120) {
           window.clearInterval(timer);
           emit({ type: "updated", thought: next });
         }
@@ -209,7 +211,14 @@ function QuoteCard({ l }: { l: SavedLink }) {
         <span className="pk-quote-site">{l.site_name || host(l.url)}</span>
       </div>
       <p className="pk-quote-text">{l.post_text}</p>
-      {l.media ? <LinkVideo l={l} /> : l.cover_url && <img className="pk-quote-img" src={l.cover_url} alt="" loading="lazy" />}
+      {l.media ? (
+        <LinkVideo l={l} />
+      ) : l.files?.length ? (
+        <PostFiles l={l} />
+      ) : (
+        l.cover_url && <img className="pk-quote-img" src={l.cover_url} alt="" loading="lazy" />
+      )}
+      <FilesState l={l} />
       <MediaState l={l} />
       <div className="pk-quote-foot">
         {l.published_at && <time dateTime={l.published_at}>{full(l.published_at)}</time>}
@@ -234,6 +243,32 @@ const clock = (sec?: number | null) => {
 };
 
 /** The downloaded video, played from Pikirler's own storage. */
+type LinkFile = NonNullable<SavedLink["files"]>[number];
+
+/** The post's own pictures and videos, kept in Pikirler. */
+function PostFiles({ l, large }: { l: SavedLink; large?: boolean }) {
+  const files: LinkFile[] = l.files ?? [];
+  const n = files.length;
+  return (
+    <div className={"pk-post-files" + (n > 1 ? " multi" : "") + (large ? " large" : "")} onClick={(e) => e.stopPropagation()}>
+      {files.map((f) =>
+        f.kind === "video" ? (
+          <video key={f.id} controls preload="metadata" playsInline src={f.content_url} poster={f.thumbnail_url ?? undefined} />
+        ) : (
+          <a key={f.id} href={f.content_url} target="_blank" rel="noopener">
+            <img src={f.thumbnail_url && !large ? f.thumbnail_url : f.content_url} alt="" loading="lazy" />
+          </a>
+        ),
+      )}
+    </div>
+  );
+}
+
+function FilesState({ l }: { l: SavedLink }) {
+  const { tn } = useI18n();
+  return l.files_pending ? <span className="pk-media-state">{tn("lk_files_pending", l.files_pending)}</span> : null;
+}
+
 function LinkVideo({ l, large }: { l: SavedLink; large?: boolean }) {
   if (!l.media) return null;
   const poster = l.media.thumbnail_url ?? l.cover_url ?? undefined;
@@ -458,7 +493,7 @@ export function Reader() {
               {page.media ? (
                 <LinkVideo l={page} large />
               ) : (
-                page.kind !== "post" && page.cover_url && <img className="pk-reader-cover" src={page.cover_url} alt="" />
+                page.kind !== "post" && !page.files?.length && page.cover_url && <img className="pk-reader-cover" src={page.cover_url} alt="" />
               )}
               <MediaState l={page} />
               {paragraphs.length ? (
@@ -466,7 +501,12 @@ export function Reader() {
               ) : (
                 <p className="pk-muted">{page.excerpt || t("lk_no_text")}</p>
               )}
-              {page.kind === "post" && !page.media && page.cover_url && <img className="pk-reader-cover" src={page.cover_url} alt="" />}
+              {page.files?.length ? (
+                <PostFiles l={page} large />
+              ) : (
+                page.kind === "post" && !page.media && page.cover_url && <img className="pk-reader-cover" src={page.cover_url} alt="" />
+              )}
+              <FilesState l={page} />
               {page.comment_count !== null && page.comment_count !== undefined && (
                 <section className="pk-reader-comments" aria-label={t("lk_comments_title")}>
                   <h2>

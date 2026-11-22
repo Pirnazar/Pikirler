@@ -88,7 +88,11 @@ TESWIRLER_PIKIR = {
         "createdAt": "2026-11-10T14:58:53.689Z",
         "updatedAt": "2026-11-10T15:02:45.081Z",
         "author": {"name": "Didar", "username": "Didar"},
-        "images": [{"url": "https://cdn.example.org/p1.jpg", "type": "IMAGE"}],
+        "images": [
+            {"url": "https://cdn.example.org/p1.jpg", "type": "IMAGE"},
+            {"url": "https://cdn.example.org/p1-b.png", "type": "IMAGE"},
+            {"url": "https://cdn.example.org/p1.mp4", "type": "VIDEO"},
+        ],
     }
 }
 # 60 comments on the pikir: two pages of 50 + 10.
@@ -157,6 +161,67 @@ TT_PAGE = (
     + "</script></body></html>"
 )
 
+MP4 = b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 4000
+
+
+def _ld(data: dict) -> str:  # type: ignore[type-arg]
+    return f'<script type="application/ld+json">{json.dumps(data, ensure_ascii=False)}</script>'
+
+
+MAKALAM_POST = {
+    "@context": "https://schema.org",
+    "@type": "SocialMediaPosting",
+    "url": "https://makalam.com/@melike/post/10955",
+    "author": {"@type": "Person", "name": "Melike", "alternateName": "@melike"},
+    "datePublished": "2026-11-22T01:13:16.677049+05:00",
+    "text": "Gözel gün! #kameramdan",
+    "image": [
+        "https://makalam.com/cdn/media/images/e622.webp",
+        "https://makalam.com/api/og/posts/10955/card.png",
+    ],
+    "commentCount": 2,
+    "comment": [
+        {
+            "@type": "SocialMediaPosting",
+            "url": "https://makalam.com/@resul/post/10960",
+            "author": {"name": "Resul", "alternateName": "@resul"},
+            "datePublished": "2026-11-22T01:15:19+05:00",
+            "text": "Ajaýyp surat",
+            "interactionStatistic": [
+                {"interactionType": "https://schema.org/LikeAction", "userInteractionCount": 2}
+            ],
+            "comment": [
+                {
+                    "@type": "SocialMediaPosting",
+                    "url": "https://makalam.com/@melike/post/10961",
+                    "author": {"name": "Melike", "alternateName": "@melike"},
+                    "datePublished": "2026-11-22T01:20:00+05:00",
+                    "text": "Sag bol!",
+                }
+            ],
+        }
+    ],
+}
+MAKALAM_ARTICLE = {
+    "@type": "Article",
+    "url": "https://makalam.com/sabyrly-derwis-10/",
+    "headline": "Sabyrly derwiş",
+    "description": "Bir gadymy rowaýat.",
+    "author": {"name": "abadan", "alternateName": "@hummingbird"},
+    "datePublished": "2023-01-01T23:01:47+05:00",
+    "dateModified": "2023-11-24T21:18:15+05:00",
+    "image": ["https://makalam.com/api/og/articles/10/card.png"],
+}
+MAKALAM_PAGES = {
+    "/@melike/post/10955": "<html><head>" + _ld(MAKALAM_POST) + "</head><body>x</body></html>",
+    "/sabyrly-derwis-10/": "<html><head>"
+    + _ld(MAKALAM_ARTICLE)
+    + '</head><body><nav>Menýu</nav><article><div class="ck-content prose"><p>Bir derwiş bardy.</p>'
+    + '<div><img src="/cdn/media/images/derwis.webp"></div><p>Ol sabyrlydy.</p></div>'
+    + '<div class="comments">Teswirler</div></article></body></html>',
+    "/@ghost/post/1": "<html><body>Sahypa tapylmady</body></html>",
+}
+
 PUBLIC = {
     "news.example.org": "93.184.216.34",
     "cdn.example.org": "93.184.216.35",
@@ -165,6 +230,7 @@ PUBLIC = {
     "sneaky.example.org": "10.0.0.5",
     "moved.example.org": "93.184.216.36",
     "publish.x.com": "104.244.42.1",
+    "makalam.com": "95.85.1.1",
     "www.youtube.com": "142.250.1.1",
     "www.tiktok.com": "23.1.1.1",
     "www.instagram.com": "157.240.1.1",
@@ -188,8 +254,16 @@ class FakeWeb:
             )
         if host == "news.example.org" and path == "/cover.png":
             return httpx.Response(200, content=png_bytes(), headers={"content-type": "image/png"})
+        if host == "cdn.example.org" and path.endswith(".mp4"):
+            return httpx.Response(200, content=MP4, headers={"content-type": "video/mp4"})
         if host == "cdn.example.org":
             return httpx.Response(200, content=png_bytes(), headers={"content-type": "image/png"})
+        if host == "makalam.com" and path.startswith("/cdn/media/"):
+            return httpx.Response(200, content=png_bytes(), headers={"content-type": "image/png"})
+        if host == "makalam.com" and path in MAKALAM_PAGES:
+            return httpx.Response(
+                200, text=MAKALAM_PAGES[path], headers={"content-type": "text/html; charset=utf-8"}
+            )
         if host == "api.teswirler.com" and path == "/blogs/watan-nireden-baslanyar":
             return httpx.Response(200, json=TESWIRLER_BLOG)
         if host == "api.teswirler.com" and path == "/blogs/f33b/comments":
@@ -1018,3 +1092,114 @@ async def test_media_health_reports_a_broken_downloader(
     health = (await client.get("/links/media-health")).json()
     assert health["broken"] is True
     assert [r["ok"] for r in health["recent"]] == [False, False, False]
+
+
+# --- pictures and videos of posts; makalam.com ----------------------------------------------
+
+
+async def test_pikir_keeps_all_its_pictures_and_videos(
+    client: httpx.AsyncClient, fake_web: FakeWeb, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    created = await new_thought(client, "https://teswirler.com/pikirler/p1")
+    await run_jobs("fetch_link")
+    link = await _link(client, created["id"])
+    assert link["files_pending"] == 3
+    await run_jobs("save_link_files")
+    link = await _link(client, created["id"])
+    assert [f["kind"] for f in link["files"]] == ["image", "image", "video"]
+    assert link["files_pending"] == 0
+    first = await client.get(link["files"][0]["content_url"].removeprefix("/api/v1/pikirler"))
+    assert first.status_code == 200
+    video = await client.get(link["files"][2]["content_url"].removeprefix("/api/v1/pikirler"))
+    assert video.content.startswith(b"\x00\x00\x00\x18ftyp")
+
+    # A background check downloads only what the post gained since.
+    fetched = [c for c in fake_web.calls if c.startswith("https://cdn.example.org/")]
+    extra = {"url": "https://cdn.example.org/p1-c.png", "type": "IMAGE"}
+    monkeypatch.setitem(
+        globals()["TESWIRLER_PIKIR"]["data"], "images", [*TESWIRLER_PIKIR["data"]["images"], extra]
+    )
+    await _sync_now()
+    await run_jobs("save_link_files")
+    link = await _link(client, created["id"])
+    assert len(link["files"]) == 4
+    new_calls = [c for c in fake_web.calls if c.startswith("https://cdn.example.org/")]
+    assert new_calls[len(fetched) :] == ["https://cdn.example.org/p1-c.png"]
+
+
+async def test_post_files_belong_to_the_copy(client: httpx.AsyncClient, fake_web: FakeWeb) -> None:
+    from datetime import timedelta
+
+    from app.modules.pikirler.models import Attachment
+    from app.modules.pikirler.services import maintenance
+
+    created = await new_thought(client, "https://teswirler.com/pikirler/p1")
+    await run_jobs("fetch_link")
+    await run_jobs("save_link_files")
+    async with get_database().sessionmaker() as db:
+        await db.execute(update(Attachment).values(uploaded_at=utcnow() - timedelta(days=30)))
+        await db.commit()
+        await maintenance.cleanup_media(db)
+    assert len((await _link(client, created["id"]))["files"]) == 3  # not "orphans"
+
+    # The link goes from the only thought that had it: its files go too.
+    await client.patch(
+        f"/thoughts/{created['id']}", json={"content": "Başga", "expected_version": 1}
+    )
+    async with get_database().sessionmaker() as db:
+        gone = (await db.execute(select(Attachment.deleted_at))).scalars().all()
+    assert len(gone) >= 3 and all(gone)
+
+
+async def test_makalam_post_with_pictures_and_comments(
+    client: httpx.AsyncClient, fake_web: FakeWeb
+) -> None:
+    created = await new_thought(client, "https://makalam.com/@melike/post/10955")
+    await run_jobs()
+    link = await _link(client, created["id"])
+    assert link["status"] == "ready", link
+    assert (link["site_name"], link["kind"], link["author"], link["author_username"]) == (
+        "makalam",
+        "post",
+        "Melike",
+        "melike",
+    )
+    assert link["author_url"] == "https://makalam.com/@melike/"
+    assert link["post_text"] == "Gözel gün! #kameramdan"
+    assert link["published_at"].startswith("2026-11-21T20:13:16")
+    # The share card makalam draws itself is not one of the author's pictures.
+    assert [f["kind"] for f in link["files"]] == ["image"]
+    assert link["comment_count"] == 2
+    detail = (await client.get(f"/links/{link['id']}")).json()
+    [comment] = detail["comments"]
+    assert (comment["author"], comment["username"], comment["likes"]) == ("Resul", "resul", 2)
+    assert [r["text"] for r in comment["replies"]] == ["Sag bol!"]
+
+
+async def test_makalam_article(client: httpx.AsyncClient, fake_web: FakeWeb) -> None:
+    created = await new_thought(client, "https://makalam.com/sabyrly-derwis-10/")
+    await run_jobs()
+    link = await _link(client, created["id"])
+    assert (link["kind"], link["title"], link["author_username"]) == (
+        "article",
+        "Sabyrly derwiş",
+        "hummingbird",
+    )
+    assert link["edited_at"] is not None
+    detail = (await client.get(f"/links/{link['id']}")).json()
+    assert detail["text"] == "Bir derwiş bardy.\n\nOl sabyrlydy."  # body only, no menu
+    assert [f["kind"] for f in link["files"]] == ["image"]
+    assert link["cover_url"]
+
+
+async def test_makalam_page_without_post_data(client: httpx.AsyncClient, fake_web: FakeWeb) -> None:
+    created = await new_thought(client, "https://makalam.com/@ghost/post/1")
+    await run_jobs()
+    async with get_database().sessionmaker() as db:
+        await db.execute(
+            update(Job).where(Job.kind == "fetch_link").values(run_after=utcnow(), attempts=3)
+        )
+        await db.commit()
+    await run_jobs()
+    link = await _link(client, created["id"])
+    assert link["status"] == "failed"

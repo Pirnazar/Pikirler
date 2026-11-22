@@ -63,6 +63,11 @@ class LinkSnapshot(Base):
     )
     media_status: Mapped[str | None] = mapped_column(String(16))
     media_error: Mapped[str | None] = mapped_column(String(64))
+    # Pictures and videos the original carries (a Teswirler pikir, a makalam
+    # post): [{"url", "kind": "image"|"video"}]. Downloaded into Pikirler as
+    # attachments (``link_attachments``); ``files_at`` is the last attempt.
+    media_sources: Mapped[list[dict[str, Any]] | None] = mapped_column(JSONB)
+    files_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     media_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     cover_key: Mapped[str | None] = mapped_column(Text)
     # Comments (Teswirler only), as a tree kept in step with the site:
@@ -124,4 +129,35 @@ class ThoughtLink(Base):
             name="fk_link_id_owner_link_snapshots",
         ),
         Index("ix_thought_links_link", "link_id"),
+    )
+
+
+class LinkAttachment(Base):
+    """A picture or video of a saved page, downloaded into Pikirler's storage
+    (an ordinary attachment: EXIF stripped, preview, thumbnail, export)."""
+
+    __tablename__ = "link_attachments"
+
+    link_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    attachment_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("attachments.id", ondelete="CASCADE"), primary_key=True
+    )
+    owner_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("owners.id", ondelete="CASCADE"), nullable=False
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    source_url: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["link_id", "owner_id"],
+            ["link_snapshots.id", "link_snapshots.owner_id"],
+            ondelete="CASCADE",
+            name="fk_link_attachments_link_owner",
+        ),
+        UniqueConstraint("link_id", "source_url", name="uq_link_attachments_source"),
+        Index("ix_link_attachments_attachment", "attachment_id"),
     )

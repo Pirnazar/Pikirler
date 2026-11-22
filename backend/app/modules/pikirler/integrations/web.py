@@ -17,6 +17,7 @@ import ipaddress
 import socket
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from typing import IO
 from urllib.parse import urljoin, urlsplit
 
 import httpx
@@ -148,10 +149,16 @@ def _check_peer(response: httpx.Response) -> None:
 
 
 async def fetch(
-    url: str, *, kinds: tuple[str, ...], max_bytes: int, accept: str = "*/*"
+    url: str,
+    *,
+    kinds: tuple[str, ...],
+    max_bytes: int,
+    accept: str = "*/*",
+    into: IO[bytes] | None = None,
 ) -> Fetched:
     """GET ``url`` and return its body if its content type starts with one of
-    ``kinds``. Raises a ``FetchError`` subclass otherwise."""
+    ``kinds`` (with ``into``, the body is written there instead). Raises a
+    ``FetchError`` subclass otherwise."""
     settings = get_settings()
     async with httpx.AsyncClient(
         transport=_transport,
@@ -189,10 +196,15 @@ async def fetch(
                     if declared.isdigit() and int(declared) > max_bytes:
                         raise TooLarge("too large")
                     body = bytearray()
+                    size = 0
                     async for chunk in response.aiter_bytes():
-                        body += chunk
-                        if len(body) > max_bytes:
+                        size += len(chunk)
+                        if size > max_bytes:
                             raise TooLarge("too large")
+                        if into is not None:  # large files go to disk, not memory
+                            into.write(chunk)
+                        else:
+                            body += chunk
                     return Fetched(url=str(response.url), content_type=ctype, body=bytes(body))
             except httpx.TimeoutException as exc:
                 raise Unreachable("timed out", code="link_timeout") from exc

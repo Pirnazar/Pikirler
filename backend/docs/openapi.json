@@ -10461,6 +10461,20 @@
             ],
             "description": "The downloaded video"
           },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/LinkMedia"
+            },
+            "type": "array",
+            "title": "Files",
+            "description": "Pictures and videos of the post, kept in Pikirler"
+          },
+          "files_pending": {
+            "type": "integer",
+            "title": "Files Pending",
+            "description": "Pictures and videos still to download",
+            "default": 0
+          },
           "cover_url": {
             "anyOf": [
               {
@@ -10521,6 +10535,11 @@
             "type": "string",
             "format": "uuid",
             "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "video"
           },
           "mime_type": {
             "type": "string",
@@ -10863,6 +10882,20 @@
               }
             ],
             "description": "The downloaded video"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/LinkMedia"
+            },
+            "type": "array",
+            "title": "Files",
+            "description": "Pictures and videos of the post, kept in Pikirler"
+          },
+          "files_pending": {
+            "type": "integer",
+            "title": "Files Pending",
+            "description": "Pictures and videos still to download",
+            "default": 0
           },
           "cover_url": {
             "anyOf": [

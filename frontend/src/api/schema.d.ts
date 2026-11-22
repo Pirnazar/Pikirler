@@ -2324,6 +2324,17 @@ export interface components {
             media_error?: string | null;
             /** @description The downloaded video */
             media?: components["schemas"]["LinkMedia"] | null;
+            /**
+             * Files
+             * @description Pictures and videos of the post, kept in Pikirler
+             */
+            files?: components["schemas"]["LinkMedia"][];
+            /**
+             * Files Pending
+             * @description Pictures and videos still to download
+             * @default 0
+             */
+            files_pending: number;
             /** Cover Url */
             cover_url?: string | null;
             /** Fetched At */
@@ -2347,6 +2358,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Kind
+             * @default video
+             */
+            kind: string;
             /** Mime Type */
             mime_type: string;
             /** File Size */
@@ -2462,6 +2478,17 @@ export interface components {
             media_error?: string | null;
             /** @description The downloaded video */
             media?: components["schemas"]["LinkMedia"] | null;
+            /**
+             * Files
+             * @description Pictures and videos of the post, kept in Pikirler
+             */
+            files?: components["schemas"]["LinkMedia"][];
+            /**
+             * Files Pending
+             * @description Pictures and videos still to download
+             * @default 0
+             */
+            files_pending: number;
             /** Cover Url */
             cover_url?: string | null;
             /** Fetched At */

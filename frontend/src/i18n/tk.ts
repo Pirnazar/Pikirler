@@ -426,6 +426,7 @@ export const tk: Dict = {
   e_rate_min: "Synanyşyk gaty köp. {n} minutdan soň synanyşyň.",
   e_password_disabled: "Bu Pikirler parol bilen däl-de, jadyly söz bilen açylýar.",
   e_magic_needed: "Siz jadyly söz bilen girýärsiňiz, şonuň üçin ony üýtgedip bolýar, aýryp bolmaýar.",
+  lk_files_pending: { one: "{n} faýl saklanýar…", other: "{n} faýl saklanýar…" },
   lk_new: "täze",
   lk_summary: "Gysgaça",
   lk_summary_making: "Gysgaça mazmun taýýarlanýar…",

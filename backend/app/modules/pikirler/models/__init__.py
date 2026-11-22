@@ -1,6 +1,6 @@
 from app.modules.pikirler.models.cinema import CinemaCue, CinemaMovie, CinemaSubtitle
 from app.modules.pikirler.models.crosspost import Crosspost, ExternalAccount
-from app.modules.pikirler.models.link import LinkSnapshot, ThoughtLink
+from app.modules.pikirler.models.link import LinkAttachment, LinkSnapshot, ThoughtLink
 from app.modules.pikirler.models.media import Attachment, ThoughtAttachment, VoiceTranscription
 from app.modules.pikirler.models.media_search import (
     MediaEntry,
@@ -37,6 +37,7 @@ __all__ = [
     "Crosspost",
     "ExternalAccount",
     "Job",
+    "LinkAttachment",
     "LinkSnapshot",
     "MediaEntry",
     "MediaIndexState",

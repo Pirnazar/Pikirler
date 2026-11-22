@@ -5,6 +5,8 @@ Rules:
   their own browser session (service tokens cannot cross-post);
 * a site's password is used once to sign in and is never stored; the
   session it yields is kept encrypted;
+* pictures and videos go along as clean copies (no EXIF, no GPS: see
+  ``outgoing_media``), as many and as large as the site takes;
 * a post is never resent automatically: ``sending`` is committed before the
   request, and a lost answer ends as ``unknown`` for the owner to check.
   (makalam de-duplicates by a key, which is the cross-post's id, so sending
@@ -34,8 +36,9 @@ from app.modules.pikirler.models import Crosspost, ExternalAccount, Thought
 from app.modules.pikirler.models.enums import CrosspostStatus, CrosspostTarget, ThoughtStatus
 from app.modules.pikirler.repositories import thoughts as thought_repo
 from app.modules.pikirler.schemas.crosspost import CrosspostOut, SiteAccountOut
-from app.modules.pikirler.services import jobs
+from app.modules.pikirler.services import jobs, outgoing_media
 from app.modules.pikirler.services.auth import Principal
+from app.modules.pikirler.services.outgoing_media import MB, FileRules, OutgoingFile
 
 log = logging.getLogger("pikirler.crosspost")
 
@@ -67,6 +70,7 @@ class Site:
 
     target: str
     name: str
+    rules: FileRules
 
     @property
     def secret_purpose(self) -> str:
@@ -87,10 +91,10 @@ class Site:
         raise NotImplementedError
 
     async def publish(
-        self, session: dict[str, Any], content: str, key: str
+        self, session: dict[str, Any], content: str, key: str, files: list[OutgoingFile]
     ) -> tuple[Published, dict[str, Any] | None]:
-        """The result and the session as it is now (it may have been renewed).
-        Raises ``remote.RemoteError`` subclasses."""
+        """Upload ``files``, then publish. Returns the result and the session as
+        it is now (it may have been renewed). Raises ``remote.RemoteError``."""
         raise NotImplementedError
 
     async def logout(self, session: dict[str, Any]) -> None:
@@ -100,6 +104,8 @@ class Site:
 class TeswirlerSite(Site):
     target = TESWIRLER
     name = "Teswirler"
+    # The site's composer: at most 4 files, pictures up to 5 MB, videos up to 20 MB.
+    rules = FileRules(max_count=4, max_bytes={"image": 5 * MB, "video": 20 * MB})
 
     def profile_url(self, username: str) -> str:
         site = get_settings().teswirler_site_url.rstrip("/")
@@ -112,12 +118,13 @@ class TeswirlerSite(Site):
             return Profile(p.user_id, p.username, p.display_name), client.session.to_dict()
 
     async def publish(
-        self, session: dict[str, Any], content: str, key: str
+        self, session: dict[str, Any], content: str, key: str, files: list[OutgoingFile]
     ) -> tuple[Published, dict[str, Any] | None]:
         start = teswirler.Session.from_dict(session)
         async with teswirler.TeswirlerClient(start) as client:
             try:
-                done = await client.publish(content)
+                urls = [await client.upload(f.name, f.mime, f.data) for f in files]
+                done = await client.publish(content, urls)
             except remote.RemoteError as exc:
                 exc.session = client.session.to_dict() if client.session else None
                 raise
@@ -132,6 +139,12 @@ class TeswirlerSite(Site):
 class MakalamSite(Site):
     target = MAKALAM
     name = "makalam"
+    # Pictures only (JPG, PNG, WebP, GIF), up to 10 MB, 6 to a post; no videos.
+    rules = FileRules(
+        max_count=6,
+        max_bytes={"image": 10 * MB},
+        image_types=frozenset({"image/jpeg", "image/png", "image/webp", "image/gif"}),
+    )
 
     def check(self, content: str) -> None:
         if len(makalam_account.split_chain(content)) > makalam_account.CHAIN_LIMIT:
@@ -151,7 +164,7 @@ class MakalamSite(Site):
             return Profile(p.user_id, p.username, p.display_name), client.session.to_dict()
 
     async def publish(
-        self, session: dict[str, Any], content: str, key: str
+        self, session: dict[str, Any], content: str, key: str, files: list[OutgoingFile]
     ) -> tuple[Published, dict[str, Any] | None]:
         parts = makalam_account.split_chain(content)
         if not parts or len(parts) > makalam_account.CHAIN_LIMIT:
@@ -159,7 +172,8 @@ class MakalamSite(Site):
         start = makalam_account.Session.from_dict(session)
         async with makalam_account.MakalamClient(start) as client:
             try:
-                done = await client.publish(parts, key)
+                images = [await client.upload(f.name, f.mime, f.data) for f in files]
+                done = await client.publish(parts, key, images)
             except remote.RemoteError as exc:
                 exc.session = client.session.to_dict() if client.session else None
                 raise
@@ -443,6 +457,7 @@ async def run(db: AsyncSession, crosspost_id: uuid.UUID) -> dict[str, Any]:
         await db.commit()
         return {"status": row.status}
     content = thought.content
+    files = await outgoing_media.collect(db, thought.id, site.rules)
 
     account = await _account(db, row.owner_id, site.target, for_update=True)
     session: dict[str, Any] | None = None
@@ -462,7 +477,7 @@ async def run(db: AsyncSession, crosspost_id: uuid.UUID) -> dict[str, Any]:
     account_id = account.id if account else None
 
     try:
-        published, current = await site.publish(session, content, str(crosspost_id))
+        published, current = await site.publish(session, content, str(crosspost_id), files)
     except remote.OutcomeUnknown as exc:
         await _save_session(db, site, account_id, exc.session, session)
         return await _finish(db, crosspost_id, CrosspostStatus.unknown, error=exc)

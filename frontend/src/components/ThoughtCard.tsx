@@ -4,7 +4,7 @@ import { typeLabel, useApp } from "../app/context";
 import { useI18n } from "../i18n";
 import { errorMessage, post } from "../api/client";
 import { emit } from "../app/bus";
-import { openX, useTeswirler, type Crosspost } from "../lib/crosspost";
+import { openX, siteName, SITES, useSites, type Crosspost, type Site } from "../lib/crosspost";
 import { full, rel } from "../lib/format";
 import { I, Icon } from "../lib/icons";
 import { Insights } from "./Insights";
@@ -31,14 +31,16 @@ export function ThoughtCard({ t, fresh }: { t: Thought; fresh?: boolean }) {
     fn();
   };
   const open = () => app.go("detail", t.id);
-  const teswirler = useTeswirler();
-  const onTeswirler = (t.crossposts ?? []).some((c) => c.target === "teswirler");
-  async function shareTeswirler() {
+  const accounts = useSites();
+  const shareable = SITES.filter(
+    (site) => accounts[site]?.connected && !(t.crossposts ?? []).some((c) => c.target === site),
+  );
+  async function shareTo(site: Site) {
     setMenu(false);
     try {
-      const next = await post<Crosspost[]>(`/thoughts/${t.id}/crossposts/teswirler`);
+      const next = await post<Crosspost[]>(`/thoughts/${t.id}/crossposts/${site}`);
       emit({ type: "updated", thought: { ...t, crossposts: next } });
-      app.toast(tr("cp_queued", { site: "Teswirler" }));
+      app.toast(tr("cp_queued", { site: siteName(site) }));
     } catch (e) {
       app.toast(errorMessage(e));
     }
@@ -106,9 +108,9 @@ export function ThoughtCard({ t, fresh }: { t: Thought; fresh?: boolean }) {
               {t.content.trim() && t.status === "published" && (
                 <button role="menuitem" onClick={() => { setMenu(false); if (!openX(t.content)) app.toast(tr("x_blocked")); }}>{tr("share_to", { site: "X" })}</button>
               )}
-              {t.content.trim() && t.status === "published" && teswirler?.connected && !onTeswirler && (
-                <button role="menuitem" onClick={shareTeswirler}>{tr("share_to", { site: "Teswirler" })}</button>
-              )}
+              {t.content.trim() && t.status === "published" && shareable.map((site) => (
+                <button key={site} role="menuitem" onClick={() => shareTo(site)}>{tr("share_to", { site: siteName(site) })}</button>
+              ))}
               <button role="menuitem" className="danger" onClick={() => { setMenu(false); app.askDelete(t); }}>{tr("delete_ellipsis")}</button>
             </div>
           )}

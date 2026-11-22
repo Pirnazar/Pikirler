@@ -130,6 +130,13 @@ export const del = <T = void>(path: string) => request<T>("DELETE", path);
 /** Human message for an error from any call. */
 export function errorMessage(e: unknown): string {
   if (!(e instanceof ApiError)) return translate("e_generic");
+  // Accounts on other sites: "<site>_login_failed", "<site>_unavailable", ...
+  const siteError = /^(teswirler|makalam)_(login_failed|unavailable|not_connected)$/.exec(e.code ?? "");
+  if (siteError) {
+    const site = siteError[1] === "teswirler" ? "Teswirler" : "makalam";
+    const key = { login_failed: "e_site_login", unavailable: "cp_unavailable", not_connected: "site_connect_first" } as const;
+    return translate(key[siteError[2] as keyof typeof key], { site });
+  }
   switch (e.code) {
     case "network":
       return e.message;
@@ -153,12 +160,8 @@ export function errorMessage(e: unknown): string {
       return translate("e_password_disabled");
     case "magic_word_required_for_login":
       return translate("e_magic_needed");
-    case "teswirler_login_failed":
-      return translate("e_teswirler_login");
-    case "teswirler_unavailable":
-      return translate("cp_unavailable");
-    case "teswirler_not_connected":
-      return translate("teswirler_connect_first");
+    case "makalam_too_long":
+      return translate("e_makalam_too_long");
     case "crosspost_already_sent":
       return translate("e_crosspost_sent");
     case "crosspost_empty":

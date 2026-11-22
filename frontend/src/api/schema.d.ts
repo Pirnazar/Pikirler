@@ -1648,23 +1648,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/pikirler/crosspost/teswirler": {
+    "/api/v1/pikirler/crosspost/{target}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Teswirler Account */
-        get: operations["teswirler_account_api_v1_pikirler_crosspost_teswirler_get"];
+        /** Site Account */
+        get: operations["site_account_api_v1_pikirler_crosspost__target__get"];
         /**
-         * Connect Teswirler
-         * @description Sign in to Teswirler once. The password is not stored.
+         * Connect Site
+         * @description Sign in to the site once. The password is not stored.
          */
-        put: operations["connect_teswirler_api_v1_pikirler_crosspost_teswirler_put"];
+        put: operations["connect_site_api_v1_pikirler_crosspost__target__put"];
         post?: never;
-        /** Disconnect Teswirler */
-        delete: operations["disconnect_teswirler_api_v1_pikirler_crosspost_teswirler_delete"];
+        /** Disconnect Site */
+        delete: operations["disconnect_site_api_v1_pikirler_crosspost__target__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2067,7 +2067,7 @@ export interface components {
          * CrosspostTarget
          * @enum {string}
          */
-        CrosspostTarget: "teswirler";
+        CrosspostTarget: "teswirler" | "makalam";
         /** DayCount */
         DayCount: {
             /**
@@ -3253,6 +3253,33 @@ export interface components {
              */
             ai_external_enabled?: boolean | null;
         };
+        /** SiteAccountOut */
+        SiteAccountOut: {
+            site: components["schemas"]["CrosspostTarget"];
+            /** Connected */
+            connected: boolean;
+            /** Username */
+            username?: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /** Profile Url */
+            profile_url?: string | null;
+            /** Connected At */
+            connected_at?: string | null;
+        };
+        /** SiteConnect */
+        SiteConnect: {
+            /**
+             * Identifier
+             * @description Username or e-mail
+             */
+            identifier: string;
+            /**
+             * Password
+             * @description Used once, never stored
+             */
+            password: string;
+        };
         /** SourceRef */
         SourceRef: {
             /**
@@ -3394,32 +3421,6 @@ export interface components {
             thought_id?: string | null;
             /** Thread Id */
             thread_id?: string | null;
-        };
-        /** TeswirlerAccountOut */
-        TeswirlerAccountOut: {
-            /** Connected */
-            connected: boolean;
-            /** Username */
-            username?: string | null;
-            /** Display Name */
-            display_name?: string | null;
-            /** Profile Url */
-            profile_url?: string | null;
-            /** Connected At */
-            connected_at?: string | null;
-        };
-        /** TeswirlerConnect */
-        TeswirlerConnect: {
-            /**
-             * Identifier
-             * @description Username or e-mail
-             */
-            identifier: string;
-            /**
-             * Password
-             * @description Used once, never stored
-             */
-            password: string;
         };
         /** ThoughtCreate */
         ThoughtCreate: {
@@ -10079,11 +10080,13 @@ export interface operations {
             };
         };
     };
-    teswirler_account_api_v1_pikirler_crosspost_teswirler_get: {
+    site_account_api_v1_pikirler_crosspost__target__get: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                target: components["schemas"]["CrosspostTarget"];
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -10094,7 +10097,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeswirlerAccountOut"];
+                    "application/json": components["schemas"]["SiteAccountOut"];
                 };
             };
             /** @description Not authenticated */
@@ -10144,16 +10147,18 @@ export interface operations {
             };
         };
     };
-    connect_teswirler_api_v1_pikirler_crosspost_teswirler_put: {
+    connect_site_api_v1_pikirler_crosspost__target__put: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                target: components["schemas"]["CrosspostTarget"];
+            };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["TeswirlerConnect"];
+                "application/json": components["schemas"]["SiteConnect"];
             };
         };
         responses: {
@@ -10163,7 +10168,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeswirlerAccountOut"];
+                    "application/json": components["schemas"]["SiteAccountOut"];
                 };
             };
             /** @description Not authenticated */
@@ -10213,11 +10218,13 @@ export interface operations {
             };
         };
     };
-    disconnect_teswirler_api_v1_pikirler_crosspost_teswirler_delete: {
+    disconnect_site_api_v1_pikirler_crosspost__target__delete: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                target: components["schemas"]["CrosspostTarget"];
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -10228,7 +10235,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TeswirlerAccountOut"];
+                    "application/json": components["schemas"]["SiteAccountOut"];
                 };
             };
             /** @description Not authenticated */

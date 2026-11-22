@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type ClipboardEvent, type KeyboardEvent } from "react";
 import { errorMessage, post, type Attachment, type Thought } from "../api/client";
 import { uploadFile } from "../api/upload";
 import { emit } from "../app/bus";
@@ -20,6 +20,20 @@ interface Pending {
   att?: Attachment;
   error?: string;
   url?: string;
+}
+
+function kindOf(f: File): Pending["kind"] {
+  return f.type.startsWith("image/") ? "image" : f.type.startsWith("video/") ? "video" : "file";
+}
+
+/** A pasted screenshot is called "image.png" by every browser: give it a
+ *  name that tells pastes apart. */
+function named(f: File): File {
+  if (!/^image\.\w+$/i.test(f.name)) return f;
+  const d = new Date();
+  const two = (n: number) => String(n).padStart(2, "0");
+  const stamp = `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}-${two(d.getHours())}-${two(d.getMinutes())}-${two(d.getSeconds())}`;
+  return new File([f], `pasted-${stamp}.${f.name.split(".").pop()}`, { type: f.type, lastModified: f.lastModified });
 }
 
 function readDraft(): string {
@@ -88,17 +102,34 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
 
   const patch = (key: string, p: Partial<Pending>) => setItems((list) => list.map((x) => (x.key === key ? { ...x, ...p } : x)));
 
-  function addFiles(kind: Pending["kind"], files: FileList | null) {
-    for (const f of [...(files ?? [])]) {
+  /** ``kind`` null: decided per file by its type (files pasted together can differ). */
+  function addFiles(kind: Pending["kind"] | null, files: FileList | File[] | null) {
+    for (const original of [...(files ?? [])]) {
+      const f = named(original);
+      const kind_ = kind ?? kindOf(f);
       const key = Math.random().toString(36).slice(2);
-      const preview = kind === "image" ? URL.createObjectURL(f) : undefined;
-      setItems((list) => [...list, { key, kind, name: f.name, preview, progress: 0 }]);
+      const preview = kind_ === "image" ? URL.createObjectURL(f) : undefined;
+      setItems((list) => [...list, { key, kind: kind_, name: f.name, preview, progress: 0 }]);
       setFocus(true);
       uploadFile(f, (p) => patch(key, { progress: p })).then(
         (att) => patch(key, { att, progress: 1 }),
         (e) => patch(key, { error: errorMessage(e), progress: 1 }),
       );
     }
+  }
+
+  /** Pictures, videos and files pasted from the clipboard become attachments,
+   *  like the ones picked with the buttons. Text pastes as usual; when the
+   *  clipboard holds text with a picture of it (Word, Excel), the text wins. */
+  function onPaste(e: ClipboardEvent<HTMLTextAreaElement>) {
+    const files = [...(e.clipboardData?.files ?? [])];
+    if (!files.length) return;
+    const text = e.clipboardData.getData("text/plain").trim();
+    // A file copied in Explorer/Finder brings its name as text: still a file.
+    const onlyNames = !text || text.split(/\r?\n/).every((line) => files.some((f) => line.trim().endsWith(f.name)));
+    if (!onlyNames) return;
+    e.preventDefault();
+    addFiles(null, files);
   }
 
   function addLink() {
@@ -285,7 +316,7 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
         </div>
         {replyLine}
         <textarea ref={ta} aria-label={t("composer_placeholder")} placeholder={t("composer_placeholder")} value={draft}
-          onChange={(e) => changeDraft(e.target.value)} onKeyDown={onKey} />
+          onChange={(e) => changeDraft(e.target.value)} onKeyDown={onKey} onPaste={onPaste} />
         {attachments}
         {share}
         <div className="pk-sheet-tools">
@@ -309,7 +340,7 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
       <div style={{ minWidth: 0 }}>
         {replyLine}
         <textarea ref={ta} rows={1} aria-label={t("composer_placeholder")} placeholder={t("composer_placeholder")} value={draft}
-          onChange={(e) => changeDraft(e.target.value, e.target)} onFocus={() => setFocus(true)} onKeyDown={onKey} />
+          onChange={(e) => changeDraft(e.target.value, e.target)} onFocus={() => setFocus(true)} onKeyDown={onKey} onPaste={onPaste} />
         {attachments}
         {linkOpen && (
           <div style={{ display: "flex", gap: 8, margin: "8px 0" }}>

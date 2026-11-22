@@ -19,7 +19,7 @@ from app.modules.pikirler.integrations import makalam_account, turbo_stream
 from app.modules.pikirler.integrations.makalam_account import split_chain, units
 from app.modules.pikirler.models import Crosspost, ExternalAccount
 from tests.conftest import new_thought
-from tests.helpers import run_jobs
+from tests.helpers import jpeg_with_gps, multipart_files, run_jobs, upload
 
 PASSWORD = "makalam-pass-456"
 
@@ -59,6 +59,9 @@ class FakeMakalam:
     sessions: set[str] = field(default_factory=lambda: set())
     mode: str = "ok"  # ok | timeout | busy | paused
     posts: list[list[str]] = field(default_factory=list)
+    images: list[list[Any]] = field(default_factory=list)
+    uploads: list[tuple[str, str, bytes]] = field(default_factory=list)
+    busy_uploads: int = 0
     by_key: dict[str, int] = field(default_factory=dict)
     calls: int = 0
     logins: int = 0
@@ -130,6 +133,16 @@ class FakeMakalam:
         if path == "/logout/" and method == "POST":
             self.logouts += 1
             return httpx.Response(302, headers={"location": "/"})
+        if path == "/posts/upload" and method == "POST":
+            if not self._session(request):
+                return httpx.Response(403, json={"detail": "Giriň"})
+            if self.busy_uploads:
+                self.busy_uploads -= 1
+                return httpx.Response(503, json={"detail": "busy"})
+            [(name, filename, mime, data)] = multipart_files(request)
+            assert name == "upload"
+            self.uploads.append((filename, mime, data))
+            return httpx.Response(201, json={"id": 900 + len(self.uploads)})
         if path == "/posts/action" and method == "POST":
             self.calls += 1
             if not self._session(request):
@@ -138,6 +151,7 @@ class FakeMakalam:
             assert body["intent"] == "create" and body["parent"] is None
             key = body["key"]
             contents = [p["content"] for p in body["posts"]]
+            self.images.append([[i["image"] for i in p["images"]] for p in body["posts"]])
             if self.mode == "paused":
                 return httpx.Response(
                     403, json={"code": "posting_paused", "detail": "Ýazmak wagtlaýyn togtadyldy"}
@@ -387,3 +401,29 @@ async def test_share_existing_thought_later(client: httpx.AsyncClient, fake: Fak
     async with get_database().sessionmaker() as db:
         [row] = (await db.execute(select(Crosspost))).scalars()
     assert row.target == "makalam" and row.status == "sent"
+
+
+async def test_pictures_go_with_the_first_post_and_videos_stay(
+    client: httpx.AsyncClient, fake: FakeMakalam
+) -> None:
+    ids = []
+    for data, name, mime in [
+        (jpeg_with_gps(), "a.jpg", "image/jpeg"),
+        (b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 4000, "v.mp4", "video/mp4"),
+        (jpeg_with_gps(1), "b.jpg", "image/jpeg"),
+    ]:
+        resp = await upload(client, data, name, mime)
+        assert resp.status_code == 200, resp.text
+        ids.append(resp.json()["id"])
+    await _connect(client)
+    fake.busy_uploads = 1  # makalam asks to try the first picture again
+    text = "\n\n".join(f"{n}-nji abzas. " + "Söz " * 100 for n in range(1, 3))
+    await new_thought(client, text, attachment_ids=ids, crosspost=["makalam"])
+    await run_jobs()
+    assert [(n, m) for n, m, _ in fake.uploads] == [
+        ("a.jpg", "image/jpeg"),
+        ("b.jpg", "image/jpeg"),
+    ]
+    assert b"SecretCam" not in fake.uploads[0][2]
+    # A chain of two posts: the pictures are on the first one.
+    assert fake.images == [[[901, 902], []]]

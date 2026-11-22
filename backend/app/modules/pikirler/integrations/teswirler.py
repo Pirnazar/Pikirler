@@ -229,21 +229,52 @@ class TeswirlerClient:
 
         return Profile(user_id=text("id"), username=text("username"), display_name=text("name"))
 
-    async def _post_once(self, content: str) -> httpx.Response:
-        try:
-            return await self._http.post(
-                self.api + "/pikirler", json={"content": content}, headers=self._auth()
+    async def upload(self, name: str, mime: str, data: bytes) -> str:
+        """A picture or video for a pikir, as the site's own ``uploadFile``:
+        ``POST /uploads?folder=teswirs`` (multipart ``file``) -> ``{url}``."""
+
+        async def send() -> httpx.Response:
+            return await self._send(
+                "POST",
+                "/uploads",
+                params={"folder": "teswirs"},
+                files={"file": (name, data, mime)},
+                headers=self._auth(),
             )
+
+        response = await send()
+        if response.status_code == 401:
+            await self.refresh()
+            response = await send()
+        if response.status_code == 401:
+            raise SessionExpired(_error_message(response), status=401)
+        if response.status_code == 429 or response.status_code >= 500:
+            raise Unavailable(_error_message(response), status=response.status_code)
+        if response.status_code >= 300:
+            raise Rejected(_error_message(response), status=response.status_code)
+        data_out = _data(response)
+        url = data_out.get("url") if isinstance(data_out, dict) else data_out
+        if not isinstance(url, str) or not url.startswith("https://"):
+            raise Unavailable("unexpected upload response")
+        return url
+
+    async def _post_once(self, content: str, images: list[str]) -> httpx.Response:
+        body: dict[str, Any] = {"content": content}
+        if images:
+            body["images"] = images
+        try:
+            return await self._http.post(self.api + "/pikirler", json=body, headers=self._auth())
         except (httpx.ConnectError, httpx.ConnectTimeout) as exc:
             raise Unavailable("Teswirler is unreachable") from exc
         except httpx.HTTPError as exc:  # sent, but the answer was lost
             raise OutcomeUnknown("no answer from Teswirler") from exc
 
-    async def publish(self, content: str) -> Published:
-        response = await self._post_once(content)
+    async def publish(self, content: str, images: list[str] | None = None) -> Published:
+        """``images``: addresses from ``upload``."""
+        response = await self._post_once(content, images or [])
         if response.status_code == 401:  # rejected before anything was created
             await self.refresh()
-            response = await self._post_once(content)
+            response = await self._post_once(content, images or [])
         if response.status_code == 401:
             raise SessionExpired(_error_message(response), status=401)
         if response.status_code in (429,) or response.status_code >= 500:

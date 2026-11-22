@@ -39,6 +39,7 @@ POST_LIMIT = 500  # root loader ``postRules.post_max_length``
 CHAIN_LIMIT = 25  # ``postRules.zynjyr_max_posts``
 RETRY_DELAY = 2.0  # seconds between tries while the site answers 409 (in progress)
 ATTEMPTS = 3
+UPLOAD_ATTEMPTS = 5  # the site's composer tries a busy (503) upload five times
 
 _transport: httpx.AsyncBaseTransport | None = None
 
@@ -317,17 +318,45 @@ class MakalamClient:
         except httpx.HTTPError as exc:  # sent, but the answer was lost
             raise OutcomeUnknown("no answer from makalam") from exc
 
-    async def publish(self, parts: list[str], key: str) -> Published:
-        """Publish ``parts`` as one post or a chain. Safe to call again with
-        the same ``key``: the site creates the posts only once."""
+    async def upload(self, name: str, mime: str, data: bytes) -> Any:
+        """A picture for a post, as the site's composer sends it:
+        ``POST /posts/upload`` (multipart ``upload``) -> 201 ``{id}``; 503
+        means the site is busy and the upload is tried again."""
         if not self.session or not self.session.cookies:
             raise SessionExpired("not connected")
-        body = {
-            "intent": "create",
-            "key": key,
-            "parent": None,
-            "posts": [{"content": part, "images": []} for part in parts],
-        }
+        for attempt in range(1, UPLOAD_ATTEMPTS + 1):
+            response = await self._send(
+                "POST",
+                "/posts/upload",
+                files={"upload": (name, data, mime)},
+                headers={"Accept": "application/json", **self._csrf_headers("/")},
+            )
+            answer = _json(response)
+            code = answer.get("code") if isinstance(answer, dict) else None
+            if response.status_code == 201 and isinstance(answer, dict) and answer.get("id"):
+                return answer["id"]
+            if response.status_code == 503 and attempt < UPLOAD_ATTEMPTS:
+                await asyncio.sleep(RETRY_DELAY)
+                continue
+            if response.status_code == 401 or (response.status_code == 403 and not code):
+                raise SessionExpired(_message(answer), status=response.status_code)
+            if response.status_code in (429, 502, 503) or response.status_code >= 500:
+                raise Unavailable(_message(answer), status=response.status_code)
+            raise Rejected(_message(answer) or "picture refused", status=response.status_code)
+        raise Unavailable("makalam is busy")  # pragma: no cover
+
+    async def publish(
+        self, parts: list[str], key: str, images: list[Any] | None = None
+    ) -> Published:
+        """Publish ``parts`` as one post or a chain; ``images`` (ids from
+        ``upload``) go with the first post. Safe to call again with the same
+        ``key``: the site creates the posts only once."""
+        if not self.session or not self.session.cookies:
+            raise SessionExpired("not connected")
+        posts: list[dict[str, Any]] = [{"content": part, "images": []} for part in parts]
+        if posts and images:
+            posts[0]["images"] = [{"image": image, "alt": ""} for image in images]
+        body = {"intent": "create", "key": key, "parent": None, "posts": posts}
         for attempt in range(1, ATTEMPTS + 1):
             response = await self._create(body, first=attempt == 1)
             status = response.status_code

@@ -519,6 +519,8 @@ export const tk: Dict = {
   site_login: "{site} ulanyjy ady ýa-da e-poçta",
   site_password: "{site} paroly",
   site_password_note: "Parol diňe bir gezek giriş üçin ulanylýar we saklanmaýar. Diňe şifrlenen sessiýa saklanýar.",
+  site_expired: "{site} sessiýasy tamamlandy. Hasaby täzeden birikdiriň.",
+  site_reconnect: "Täzeden birikdir",
   makalam_desc: "500 harpdan uzyn pikir ýazgylaryň zynjyry bolup gidýär (25-e çenli).",
   makalam_login: "makalam ulanyjy ady",
   makalam_chain: "makalam: 500 harpdan uzyn, zynjyr bolup gider",

@@ -4,7 +4,7 @@ import { typeLabel, useApp } from "../app/context";
 import { useI18n } from "../i18n";
 import { errorMessage, post } from "../api/client";
 import { emit } from "../app/bus";
-import { openX, siteName, SITES, useSites, type Crosspost, type Site } from "../lib/crosspost";
+import { openX, siteName, SITES, usable, useSites, type Crosspost, type Site } from "../lib/crosspost";
 import { full, rel } from "../lib/format";
 import { I, Icon } from "../lib/icons";
 import { Insights } from "./Insights";
@@ -33,7 +33,7 @@ export function ThoughtCard({ t, fresh }: { t: Thought; fresh?: boolean }) {
   const open = () => app.go("detail", t.id);
   const accounts = useSites();
   const shareable = SITES.filter(
-    (site) => accounts[site]?.connected && !(t.crossposts ?? []).some((c) => c.target === site),
+    (site) => usable(accounts[site]) && !(t.crossposts ?? []).some((c) => c.target === site),
   );
   async function shareTo(site: Site) {
     setMenu(false);

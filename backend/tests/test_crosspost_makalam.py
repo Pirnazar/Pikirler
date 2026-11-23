@@ -243,6 +243,7 @@ async def test_connect_keeps_no_password(client: httpx.AsyncClient, fake: FakeMa
     assert (await client.get("/crosspost/makalam")).json() == {
         "site": "makalam",
         "connected": False,
+        "expired": False,
         "username": None,
         "display_name": None,
         "profile_url": None,
@@ -427,3 +428,23 @@ async def test_pictures_go_with_the_first_post_and_videos_stay(
     assert b"SecretCam" not in fake.uploads[0][2]
     # A chain of two posts: the pictures are on the first one.
     assert fake.images == [[[901, 902], []]]
+
+
+async def test_makalam_session_is_kept_and_its_end_noticed(
+    client: httpx.AsyncClient, fake: FakeMakalam
+) -> None:
+    from sqlalchemy import update
+
+    from app.modules.pikirler.services import crosspost
+
+    async def keep() -> dict[str, int]:
+        async with get_database().sessionmaker() as db:
+            await db.execute(update(ExternalAccount).values(checked_at=None))
+            await db.commit()
+            return await crosspost.keep_sessions(db)
+
+    await _connect(client)
+    assert (await keep())["renewed"] == 1
+    fake.sessions.clear()  # makalam signed Pikirler out
+    assert (await keep())["expired"] == 1
+    assert (await client.get("/crosspost/makalam")).json()["expired"] is True

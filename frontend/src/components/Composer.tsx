@@ -5,7 +5,7 @@ import { emit } from "../app/bus";
 import { typeLabel, useApp } from "../app/context";
 import { useI18n } from "../i18n";
 import { useOnline } from "../app/hooks";
-import { MAKALAM_CHAIN, MAKALAM_LIMIT, openX, reserveTab, siteName, SITES, useSites, xText, type Site } from "../lib/crosspost";
+import { MAKALAM_CHAIN, MAKALAM_LIMIT, openX, reserveTab, siteName, SITES, usable, useSites, xText, type Site } from "../lib/crosspost";
 import { parseTags, snip } from "../lib/format";
 import { I, Icon } from "../lib/icons";
 
@@ -160,7 +160,7 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
     if (!canPublish) return;
     const links = items.filter((p) => p.kind === "link").map((p) => p.url!);
     const content = [draft.trim(), ...links].filter(Boolean).join("\n\n");
-    const sendTo = toSites.filter((s) => accounts[s]?.connected);
+    const sendTo = toSites.filter((s) => usable(accounts[s]));
     if ((toX || sendTo.length) && !content.trim()) return app.toast(t("e_crosspost_empty"));
     const body = {
       content,
@@ -247,15 +247,18 @@ export function Composer({ variant, onClose }: { variant: "inline" | "sheet"; on
         const account = accounts[site];
         const name = siteName(site);
         return (
-          <label key={site} className={"pk-check" + (account?.connected ? "" : " off")}
-            title={account?.connected ? "@" + (account.username ?? "") : t("site_connect_first", { site: name })}>
-            <input type="checkbox" aria-label={name} checked={toSites.includes(site) && !!account?.connected} disabled={!account?.connected}
+          <label key={site} className={"pk-check" + (usable(account) ? "" : " off")}
+            title={
+              usable(account) ? "@" + (account?.username ?? "")
+                : account?.expired ? t("site_expired", { site: name }) : t("site_connect_first", { site: name })
+            }>
+            <input type="checkbox" aria-label={name} checked={toSites.includes(site) && usable(account)} disabled={!usable(account)}
               onChange={(e) => toggleSite(site, e.target.checked)} />
             <span>{name}</span>
           </label>
         );
       })}
-      {SITES.some((site) => !accounts[site]?.connected) && (
+      {SITES.some((site) => !usable(accounts[site])) && (
         <button type="button" className="pk-link-btn" onClick={() => { onClose?.(); app.go("settings"); }}>{t("sites_connect_short")}</button>
       )}
       {toSites.includes("teswirler") && media > 4 && <span className="pk-share-note">{t("cp_files_teswirler")}</span>}

@@ -26,6 +26,9 @@ class SiteConnect(Schema):
 class SiteAccountOut(Schema):
     site: CrosspostTarget
     connected: bool
+    expired: bool = Field(
+        default=False, description="The site ended the session: connect the account again"
+    )
     username: str | None = None
     display_name: str | None = None
     profile_url: str | None = None

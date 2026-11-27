@@ -161,6 +161,10 @@ services:
   nginx:
     build:
       context: ../frontend
+      args:
+        # The interface lives under /pikirler/ so the server root can host
+        # other apps too (deploy/nginx.conf, deploy/locations.d/).
+        PIKIRLER_BASE_PATH: ${PIKIRLER_BASE_PATH:-/pikirler/}
     image: pikirler-web:prod
     restart: unless-stopped
     ports:
@@ -169,6 +173,9 @@ services:
     volumes:
       - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
       - ${TLS_CERT_DIR:-./deploy/certs}:/etc/nginx/certs:ro
+      # Extra location blocks for other apps on the same host (one *.conf
+      # per app, server-specific, not in git) — see deploy/locations.d/README.md.
+      - ./deploy/locations.d:/etc/nginx/locations.d:ro
     depends_on: [api]
     networks: [internal]
 

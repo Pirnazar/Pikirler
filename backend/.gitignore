@@ -11,4 +11,6 @@ __pycache__/
 data/
 backups/
 deploy/certs/
+# Server-specific nginx locations for other apps (see deploy/locations.d/README.md).
+deploy/locations.d/*.conf
 .env.production

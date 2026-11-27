@@ -5,6 +5,9 @@ WORKDIR /src
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY . .
+# Sub-path for the built asset URLs ("/" or e.g. "/pikirler/"); see vite.config.ts.
+ARG PIKIRLER_BASE_PATH=/
+ENV PIKIRLER_BASE_PATH=${PIKIRLER_BASE_PATH}
 RUN npm run build
 
 FROM nginx:1.27-alpine
